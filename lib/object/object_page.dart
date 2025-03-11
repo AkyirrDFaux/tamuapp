@@ -81,7 +81,6 @@ class ObjectPage extends StatelessWidget {
                   message.addSegment(Types.Text, newValue);
                   BluetoothManager().sendMessage(message);
                 }
-                //Add a sending function instead
               },
             ),
             const SizedBox(height: 8),
@@ -90,14 +89,12 @@ class ObjectPage extends StatelessWidget {
               initialValue: object.flags,
               onChanged: (newValue) {
                 if(newValue != null){
-                  //TODO: Add a sending function
-                  /*Message message = Message();
-                  message.addSegment(Types.Function, Functions.WriteName);
+                  Message message = Message();
+                  message.addSegment(Types.Function, Functions.SetFlags);
                   message.addSegment(Types.ID, object.id);
-                  message.addSegment(Types.Text, newValue);
-                  BluetoothManager().sendMessage(message);*/
+                  message.addSegment(Types.Flags, newValue);
+                  BluetoothManager().sendMessage(message);
                 }
-                //Add a sending function instead
               },
             ),
             const SizedBox(height: 8),

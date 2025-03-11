@@ -3,8 +3,8 @@ enum Flags {
   auto(1), // 0b00000001
   none1(2),
   none2(4),
-  runOnce(8), // 0b00001000
-  runLoop(16), // 0b00010000
+  runLoop(8), // 0b00001000
+  runOnce(16), // 0b00010000
   runOnStartup(32), // 0b00100000
   favourite(64), // 0b01000000
   inactive(128); // 0b10000000

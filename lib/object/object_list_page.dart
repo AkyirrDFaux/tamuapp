@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../bluetooth/bluetooth_manager.dart';
+import '../functions.dart';
+import '../message/message.dart';
+import '../types.dart';
+import '../flags.dart';
 import 'object_manager.dart'; // Import your ObjectManager
 import 'object_page.dart';
 import 'new_object_page.dart';
@@ -13,7 +18,6 @@ class ObjectListPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Object List'),
         actions: [
-
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () {
@@ -56,6 +60,52 @@ class ObjectListPage extends StatelessWidget {
               return ListTile(
                 title: Text(object.name),
                 subtitle: Text(object.id.toString()),
+                trailing: object.type == Types.Program
+                    ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if ((object.flags.value &
+                    (Flags.runLoop.value | Flags.runOnce.value)) == 0) ...[
+                      IconButton(
+                        icon: const Icon(Icons.one_x_mobiledata),
+                        onPressed: () {
+                          Message message = Message();
+                          message.addSegment(
+                              Types.Function, Functions.SetFlags);
+                          message.addSegment(Types.ID, object.id);
+                          message.addSegment(Types.Flags,
+                              FlagClass(object.flags.value | Flags.runOnce.value));
+                          BluetoothManager().sendMessage(message);
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.play_arrow),
+                        onPressed: () {
+                          Message message = Message();
+                          message.addSegment(
+                              Types.Function, Functions.SetFlags);
+                          message.addSegment(Types.ID, object.id);
+                          message.addSegment(Types.Flags,
+                              FlagClass(object.flags.value | Flags.runLoop.value));
+                          BluetoothManager().sendMessage(message);
+                        },
+                      ),
+                    ] else
+                      IconButton(
+                        icon: const Icon(Icons.stop),
+                        onPressed: () {
+                          Message message = Message();
+                          message.addSegment(
+                              Types.Function, Functions.SetFlags);
+                          message.addSegment(Types.ID, object.id);
+                          message.addSegment(
+                              Types.Flags, FlagClass(object.flags.value & ~(Flags.runLoop.value | Flags.runOnce.value)));
+                          BluetoothManager().sendMessage(message);
+                        },
+                      ),
+                  ],
+                )
+                    : null,
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(

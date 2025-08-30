@@ -132,6 +132,9 @@ class BluetoothManager extends ChangeNotifier {
     newData.setRange(_receivedData.length, newData.length, data);
     _receivedData = newData;
 
+    final hexString = data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ');
+    debugPrint('Received data (hex): $hexString');
+
     // Process the message buffer
     _processMessage();
     notifyListeners();

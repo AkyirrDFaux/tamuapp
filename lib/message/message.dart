@@ -34,7 +34,7 @@ class Message {
           case Types.Text:
             segmentSize = messageData[offset + 1] + 2;
           case Types.IDList:
-            segmentSize = messageData[offset + 1]*5 + 2;
+            segmentSize = messageData[offset + 1]*4 + 2;
           default:
             segmentSize = 1;
         }
@@ -148,11 +148,12 @@ class Message {
         final byteData = ByteData.sublistView(data);
         final idList = <MapEntry<int, int>>[];
         int offset = 0;
+        int index = 0;
         while (offset < data.length) {
-          final index = byteData.getUint8(offset);
-          final value = byteData.getUint32(offset + 1, Endian.little);
+          final value = byteData.getUint32(offset, Endian.little);
           idList.add(MapEntry(index, value));
-          offset += 5;
+          index += 1;
+          offset += 4;
         }
         return idList;
       default:
@@ -279,12 +280,11 @@ class Message {
         break;
       case Types.IDList:
         if (data is List<MapEntry<int, int>>) {
-          final newSegment = Uint8List(data.length * 5+ 2);
+          final newSegment = Uint8List(data.length * 4+ 2);
           newSegment[0] = type.value;
           newSegment[1] = data.length;
           for (int i = 0; i < data.length; i++) {
-            ByteData.sublistView(newSegment).setUint8(i * 5 + 2, data[i].key);
-            ByteData.sublistView(newSegment).setUint32(i * 5 + 3, data[i].value,Endian.little);
+            ByteData.sublistView(newSegment).setUint32(i * 4 + 2, data[i].value,Endian.little);
           }
           segments[index] = newSegment;
         }

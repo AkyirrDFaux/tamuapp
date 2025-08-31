@@ -52,12 +52,29 @@ class Message {
 
   @override
   String toString() {
+    if (segments.isEmpty) {
+      return "Message (empty)";
+    }
+    // Use map to create a list of strings, each representing a segment,
+    // then join them with a newline character.
     String segmentStrings = segments.map((segment) {
-      Types type = getSegmentType(segments.indexOf(segment));
-      dynamic data = getSegmentData(segments.indexOf(segment));
-      return "${type.name}: $data";
-    }).join(", ");
-    return segmentStrings;
+      // It's safer to get the index directly rather than relying on segments.indexOf(segment)
+      // if segments could potentially contain duplicate Uint8List instances (though unlikely here).
+      // However, for simplicity and assuming unique segments in the list order:
+      int index = segments.indexOf(segment); // Be cautious if segments can have identical Uint8List instances
+      if (index == -1) return "Error: Segment not found in message"; // Should not happen with current structure
+
+      Types type = getSegmentType(index);
+      dynamic data;
+      try {
+        data = getSegmentData(index);
+      } catch (e) {
+        data = "Error reading data: $e";
+      }
+      return "  ${type.name}: $data"; // Added indentation for better readability
+    }).join("\n"); // Join with newline character
+
+    return "\n$segmentStrings"; // Add a header for the message itself
   }
 
   /// Returns the number of segments in the message.

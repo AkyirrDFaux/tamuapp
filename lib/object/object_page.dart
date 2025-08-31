@@ -62,7 +62,7 @@ class ObjectPage extends StatelessWidget {
             const SizedBox(height: 8),
             EditableField(
               label: 'Type',
-              initialValue: object.type,
+              initialValue: object.type.name,
               onChanged: (newValue) {
                 if(newValue != null){
                   //object.type = newValue;

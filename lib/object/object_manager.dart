@@ -93,6 +93,25 @@ class ObjectManager extends ChangeNotifier {
     }
   }
 
+  void SetFlags(Message message) {
+    if (message.getSegmentType(1) == Types.ID &&
+        message.getSegmentType(2) == Types.Flags) {
+      int id = message.getSegmentData(1);
+      Object? targetObject = getObjectById(id);
+
+      if (targetObject != null) {
+        targetObject.flags = message.getSegmentData(2);
+        notifyListeners(); // Notify listeners if the object's state changed
+      } else {
+        // Handle the case where the object with the given ID is not found
+        print("Object with ID $id not found.");
+      }
+    } else {
+      // Handle incorrect message format
+      print("Invalid message format for SetFlags.");
+    }
+  }
+
   void runMessage(Message message){
     if(message.getSegmentType(0) != Types.Function) {
       return;
@@ -103,6 +122,9 @@ class ObjectManager extends ChangeNotifier {
         break;
       case Functions.WriteValue:
         WriteValue(message);
+        break;
+      case Functions.SetFlags: // Assuming you add SetFlags to your Functions enum
+        SetFlags(message);
         break;
       default:
         print("Not implemented:" + message.getSegmentData(0).toString());

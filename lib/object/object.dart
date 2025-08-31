@@ -17,7 +17,7 @@ class Object {
   List<Object> references(List<Object> allObjects) {
     List<Object> result = [];
     for (Object obj in allObjects) {
-      if (obj.modules.any((module) => module.key == this.id)) {
+      if (obj.modules.any((module) => module.key == id)) {
         result.add(obj);
       }
     }

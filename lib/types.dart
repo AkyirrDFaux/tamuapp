@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum Types {
   Undefined(0),
   Folder(1),
@@ -132,4 +134,48 @@ enum Types {
         return Types.Undefined;
     }
   }
+}
+
+final Map<Types, IconData> typeIcons = {
+  Types.Undefined: Icons.help_outline,
+  Types.Folder: Icons.folder_outlined,
+  Types.Shape2D: Icons.category_outlined, // Good for abstract shapes
+  Types.Byte: Icons.data_object_outlined,
+  Types.Bool: Icons.toggle_on_outlined, // Or Icons.check_box_outlined
+  Types.Type: Icons.sell_outlined, // Represents a tag or type label
+  Types.Function: Icons.functions_outlined,
+  Types.Flags: Icons.flag_outlined,
+  Types.Status: Icons.info_outline,
+  Types.Board: Icons.memory_outlined,
+  Types.Port: Icons.lan_outlined,
+  Types.PortDriver: Icons.tune_outlined, // Chip icon, often related to drivers
+  Types.Fan: Icons.wind_power_outlined,
+  Types.LEDStrip: Icons.wb_incandescent_outlined, // Lightbulb
+  Types.LEDSegment: Icons.view_agenda_outlined, // Segments in a row
+  Types.Texture1D: Icons.linear_scale_outlined,
+  Types.Display: Icons.desktop_windows_outlined,
+  Types.Geometry2D: Icons.square_foot_outlined, // Ruler and angle
+  Types.GeometryOperation: Icons.gesture_outlined, // Hand drawing
+  Types.Texture2D: Icons.texture_outlined,
+  Types.AnimationFloat: Icons.trending_up_outlined,
+  Types.AnimationVector: Icons.timeline_outlined,
+  Types.AnimationCoord: Icons.control_camera_outlined, // Move/pan icon
+  Types.AnimationColour: Icons.palette_outlined,
+  Types.Operation: Icons.settings_outlined, // Gears for operations
+  Types.Program: Icons.terminal_outlined,
+  Types.Integer: Icons.pin_outlined, // Numbered pin
+  Types.Time: Icons.schedule_outlined,
+  Types.Number: Icons.looks_one_outlined, // Or more generic: Icons.calculate_outlined
+  Types.ID: Icons.fingerprint_outlined,
+  Types.Colour: Icons.color_lens_outlined,
+  Types.PortAttach: Icons.link_outlined,
+  Types.Vector2D: Icons.open_in_full_outlined, // Expand/vectorial idea
+  Types.Coord2D: Icons.place_outlined,
+  Types.Text: Icons.title_outlined,
+  Types.IDList: Icons.list_alt_outlined,
+};
+
+// Example of how to use it:
+IconData getIconForType(Types type) {
+  return typeIcons[type] ?? Icons.device_unknown; // Fallback icon
 }

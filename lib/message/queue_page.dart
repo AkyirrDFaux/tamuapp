@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../types.dart';
 import 'message_queue.dart';
-import 'compose_message_page.dart'; // Import the new file
+//import 'compose_message_page.dart';
 
 class QueuePage extends StatefulWidget {
   const QueuePage({super.key});
@@ -56,10 +56,10 @@ class _QueuePageState extends State<QueuePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(
+          /*Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const ComposeMessagePage()),
-          );
+          );*/
         },
         child: const Icon(Icons.add),
       ),

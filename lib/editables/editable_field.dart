@@ -1,160 +1,117 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import '../flags.dart';
-import '../object/object_manager.dart';
+import '../types.dart';
 import 'coord2d_dialog.dart';
 import 'flag_dialog.dart';
 import 'single_value_dialog.dart';
 import 'map_dialog.dart';
 import 'vector2d_dialog.dart';
 import 'colour_dialog.dart';
-import '../object/object.dart';
+import 'value_dialog.dart'; // Import the new dialog
+import '../values.dart';
 
-class EditableField extends StatefulWidget {
+// A type definition for a function that builds a dialog widget.
+typedef DialogBuilder = Widget Function(
+    String label,
+    dynamic initialValue,
+    ValueChanged<dynamic> onChanged,
+    );
+
+class EditField extends StatefulWidget {
   final String label;
   final dynamic initialValue;
   final ValueChanged<dynamic> onChanged;
+  final Types type;
 
-  const EditableField({
+  const EditField({
     super.key,
     required this.label,
     required this.initialValue,
     required this.onChanged,
+    required this.type,
   });
 
   @override
-  State<EditableField> createState() => _EditableFieldState();
+  State<EditField> createState() => _EditFieldState();
 }
 
-class _EditableFieldState extends State<EditableField> {
-  late dynamic _newValue;
+class _EditFieldState extends State<EditField> {
+  // A map that associates editor types with their specific dialog builders.
+  static final Map<Types, DialogBuilder> _dialogBuilders = {
+    Types.IDList: (label, initialValue, onChanged) => MapDialog(
+      label: label,
+      initialValue: initialValue,
+      onChanged: onChanged,
+    ),
+    Types.Vector2D: (label, initialValue, onChanged) => Vector2DDialog(
+      label: label,
+      initialValue: initialValue,
+      onChanged: onChanged,
+    ),
+    Types.Coord2D: (label, initialValue, onChanged) => Coord2DDialog(
+      label: label,
+      initialValue: initialValue,
+      onChanged: onChanged,
+    ),
+    Types.Colour: (label, initialValue, onChanged) => ColourDialog(
+      label: label,
+      initialValue: initialValue,
+      onChanged: onChanged,
+    ),
+    Types.Flags: (label, initialValue, onChanged) => FlagDialog(
+      label: label,
+      initialValue: initialValue,
+      onChanged: onChanged,
+    ),
+  };
 
-  @override
-  void initState() {
-    super.initState();
-    _newValue = widget.initialValue;
+  void _handleValueChange(dynamic newValue) {
+    widget.onChanged(newValue);
   }
 
   void _showEditDialog(BuildContext context) {
+    // Check for the special enum case first.
+    if (isInValueEnum(widget.type)) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return ValueDialog(
+            label: widget.label,
+            initialValue: widget.initialValue,
+            onChanged: _handleValueChange,
+            type: widget.type,
+          );
+        },
+      );
+      return; // Stop further execution
+    }
+
+    // Find the correct dialog builder from the map using the widget's type, or use the default.
+    final builder = _dialogBuilders[widget.type] ??
+            (label, initialValue, onChanged) => SingleValueDialog(
+          label: label,
+          initialValue: initialValue,
+          onChanged: onChanged,
+        );
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        if (widget.initialValue is List<MapEntry<int, int>>) {
-          return MapDialog(
-            label: widget.label,
-            initialValue: widget.initialValue,
-            onChanged: (newValue) {
-              setState(() {
-                _newValue = newValue;
-              });
-              widget.onChanged(newValue);
-            },
-          );
-        } else if (widget.initialValue is Vector2D) {
-          return Vector2DDialog(
-            label: widget.label,
-            initialValue: widget.initialValue,
-            onChanged: (newValue) {
-              setState(() {
-                _newValue = newValue;
-              });
-              widget.onChanged(newValue);
-            },
-          );
-        }
-        else if (widget.initialValue is Coord2D) {
-          return Coord2DDialog(
-            label: widget.label,
-            initialValue: widget.initialValue,
-            onChanged: (newValue) {
-              setState(() {
-                _newValue = newValue;
-              });
-              widget.onChanged(newValue);
-            },
-          );
-        }
-        else if (widget.initialValue is Colour) {
-          return ColourDialog(
-            label: widget.label,
-            initialValue: widget.initialValue,
-            onChanged: (newValue) {
-              setState(() {
-                _newValue = newValue;
-              });
-              widget.onChanged(newValue);
-            },
-          );
-        } else if (widget.initialValue is FlagClass) {
-          return FlagDialog(
-            label: widget.label,
-            initialValue: widget.initialValue,
-            onChanged: (newValue) {
-              setState(() {
-                _newValue = newValue;
-              });
-              widget.onChanged(newValue);
-            },
-          );
-        } else {
-          return SingleValueDialog(
-            label: widget.label,
-            initialValue: widget.initialValue,
-            onChanged: (newValue) {
-              setState(() {
-                _newValue = newValue;
-              });
-              widget.onChanged(newValue);
-            },
-          );
-        }
+        return builder(
+          widget.label,
+          widget.initialValue,
+          _handleValueChange,
+        );
       },
     );
   }
 
-  String _getDisplayValue() {
-    if (_newValue is List<MapEntry<int, int>>) {
-      // Format the list of MapEntry for display, each on a new line
-      return _newValue.map((entry) {
-        Object? obj;
-        try {
-          obj = ObjectManager().objects.firstWhere(
-                (obj) => obj.id == entry.value,
-          );
-        } catch (e) {
-          obj = null;
-        }
-        if (obj == null) {
-          return "${entry.key}, ${entry.value} : (None)";
-        } else {
-          return "${entry.key}, ${entry.value} : ${obj.name} (${obj.type
-              .name})";
-        }
-      }).join('\n');
-    } else if (_newValue is Coord2D) {
-      return "${_newValue.Position}, Angle: ${atan2(_newValue.Rotation.Y,_newValue.Rotation.X) * 180 / pi}°";
-    } else {
-      return _newValue.toString();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            '${widget.label}: ${_getDisplayValue()}',
-            // Add the following line to allow multiline text
-            textAlign: TextAlign.start,
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.edit),
-          onPressed: () => _showEditDialog(context),
-        ),
-      ],
+    return IconButton(
+      icon: const Icon(Icons.edit),
+      onPressed: () => _showEditDialog(context),
     );
   }
 }
+

@@ -97,7 +97,7 @@ class ObjectListPage extends StatelessWidget {
                       (Flags.runLoop.value | Flags.runOnce.value)) ==
                           0) ...[
                         IconButton(
-                          icon: const Icon(Icons.one_x_mobiledata),
+                          icon: const Icon(Icons.one_x_mobiledata_outlined),
                           onPressed: () {
                             Message message = Message();
                             message.addSegment(
@@ -111,7 +111,7 @@ class ObjectListPage extends StatelessWidget {
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.play_arrow),
+                          icon: const Icon(Icons.play_arrow_outlined),
                           onPressed: () {
                             Message message = Message();
                             message.addSegment(

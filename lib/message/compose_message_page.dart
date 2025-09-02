@@ -73,7 +73,7 @@ class _ComposeMessagePageState extends State<ComposeMessagePage> {
                   );
                 } else {
                   return ListTile(
-                    title: EditableField(
+                    title: EditField(
                       label: message.getSegmentType(index).name,
                       initialValue: message.getSegmentData(index),
                       onChanged: (newValue) {

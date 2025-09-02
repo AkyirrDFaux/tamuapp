@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import 'dart:convert';
 
+import 'package:appble/values.dart';
+
 import '../functions.dart';
 import '../flags.dart';
 import '../object/object.dart';
@@ -70,6 +72,10 @@ class Message {
         data = getSegmentData(index);
       } catch (e) {
         data = "Error reading data: $e";
+      }
+
+      if (isInValueEnum(type)){
+        return "  ${type.name}: ${getValueEnum(type, data)}"; // Added indentation for better readability
       }
       return "  ${type.name}: $data"; // Added indentation for better readability
     }).join("\n"); // Join with newline character

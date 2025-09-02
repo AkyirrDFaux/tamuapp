@@ -27,3 +27,15 @@ class MyApp extends StatelessWidget {
   }
 }
 
+/*TODO:
+Flags as icons
+EnumValue editable dialog
+Improve Object page overall
+
+Object graph navigation (history)
+
+Quick actions
+
+Autoconnect?
+IDList to normal list?
+ */

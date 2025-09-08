@@ -34,9 +34,10 @@ enum Types {
   Colour(30),
   PortAttach(31),
   Vector2D(32),
-  Coord2D(33),
-  Text(34),
-  IDList(35);
+  Vector3D(33),
+  Coord2D(34),
+  Text(35),
+  IDList(36);
 
   final int value;
   const Types(this.value);
@@ -50,6 +51,8 @@ enum Types {
       return 4;
     else if (type.value == Types.Vector2D.value)
       return 8;
+    else if (type.value == Types.Vector3D.value)
+      return 12;
     else if (type.value == Types.Coord2D.value)
       return 16;
     else
@@ -125,10 +128,12 @@ enum Types {
       case 32:
         return Types.Vector2D;
       case 33:
-        return Types.Coord2D;
+        return Types.Vector3D;
       case 34:
-        return Types.Text;
+        return Types.Coord2D;
       case 35:
+        return Types.Text;
+      case 36:
         return Types.IDList;
       default:
         return Types.Undefined;
@@ -166,10 +171,11 @@ final Map<Types, IconData> typeIcons = {
   Types.Integer: Icons.pin_outlined, // Numbered pin
   Types.Time: Icons.schedule_outlined,
   Types.Number: Icons.looks_one_outlined, // Or more generic: Icons.calculate_outlined
-  Types.ID: Icons.fingerprint_outlined,
+  Types.ID: Icons.tag_outlined,
   Types.Colour: Icons.color_lens_outlined,
   Types.PortAttach: Icons.link_outlined,
   Types.Vector2D: Icons.open_in_full_outlined, // Expand/vectorial idea
+  Types.Vector3D: Icons.navigation_outlined, // Expand/vectorial idea
   Types.Coord2D: Icons.place_outlined,
   Types.Text: Icons.title_outlined,
   Types.IDList: Icons.list_alt_outlined,

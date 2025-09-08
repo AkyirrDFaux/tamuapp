@@ -154,6 +154,11 @@ class Message {
         final byteData = ByteData.sublistView(data);
         return Vector2D(byteData.getFloat32(0, Endian.little),
             byteData.getFloat32(4, Endian.little));
+      case Types.Vector3D:
+        final data = segment.sublist(1);
+        final byteData = ByteData.sublistView(data);
+        return Vector3D(byteData.getFloat32(0, Endian.little),
+            byteData.getFloat32(4, Endian.little),byteData.getFloat32(8, Endian.little));
       case Types.Coord2D:
           final data = segment.sublist(1);
           final byteData = ByteData.sublistView(data);
@@ -267,6 +272,16 @@ class Message {
           ByteData.sublistView(segment).setFloat32(5, data.Y,Endian.little);
         } else {
           throw ArgumentError("Data must be a Vector2D for Types.vector2D");
+        }
+        break;
+      case Types.Vector3D:
+        if (data is Vector3D) {
+          final segment = segments[index];
+          ByteData.sublistView(segment).setFloat32(1, data.X,Endian.little);
+          ByteData.sublistView(segment).setFloat32(5, data.Y,Endian.little);
+          ByteData.sublistView(segment).setFloat32(9, data.Z,Endian.little);
+        } else {
+          throw ArgumentError("Data must be a Vector3D for Types.vector2D");
         }
         break;
         case Types.Coord2D:

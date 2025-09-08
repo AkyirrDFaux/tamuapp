@@ -36,6 +36,18 @@ class Vector2D {
   }
 }
 
+class Vector3D {
+  double X = 0;
+  double Y = 0;
+  double Z = 0;
+
+  Vector3D(this.X, this.Y,this.Z);
+  @override
+  String toString() {
+    return 'Vector3D(X: $X, Y: $Y, Z: $Z)';
+  }
+}
+
 class Coord2D {
   Vector2D Position = Vector2D(0, 0);
   Vector2D Rotation = Vector2D(1, 0);

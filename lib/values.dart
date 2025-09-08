@@ -15,8 +15,8 @@ Map<Types, List<String>> typeToValueNames = {
   ],
   Types.Board: [
     "Undefined",
-    "Tamu_v1_0",
-    "Tamu_v2_0",
+    "Tamu v1.0",
+    "Tamu v2.0",
   ],
   Types.Port: [
     "None",
@@ -66,25 +66,9 @@ Map<Types, List<String>> typeToValueNames = {
     "Undefined",
     "Generic",
   ],
-  Types.AnimationFloat: [
-    "None",
-    "MoveTo",
-    "MoveBetween",
-  ],
-  Types.AnimationVector: [
-    "None",
-    "MoveTo",
-    "MoveBetween",
-  ],
-  Types.AnimationCoord: [
-    "None",
-    "MoveTo",
-  ],
-  Types.AnimationColour: [
-    "None",
-    "TimeBlend",
-    "BlendLoop",
-    "BlendRGB",
+  Types.AccGyr: [
+    "Undefined",
+    "LSM6DS3TRC"
   ],
   Types.Program: [
     "None",
@@ -105,6 +89,8 @@ Map<Types, List<String>> typeToValueNames = {
     "Absolute",
     "Rotate",
     "RandomBetween",
+    "MoveTo",
+    "Delay",
     "AddDelay",
     "IfSwitch",
     "While",

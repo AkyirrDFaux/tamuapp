@@ -57,7 +57,13 @@ class ObjectManager extends ChangeNotifier {
       && message.getSegmentType(1) == Types.Type){
         int id = message.getSegmentData(2);
         Types type = message.getSegmentData(1);
-        newObject = Object(type: type, id: id);
+        Object? existingObject = getObjectById(id);
+        if (existingObject != null) {
+          newObject = existingObject;
+        }
+        else{
+          newObject = Object(type: type, id: id);
+        }
       }
       else {
         return;
@@ -76,7 +82,12 @@ class ObjectManager extends ChangeNotifier {
         newObject.value = message.getSegmentData(6);
       }
 
-      addObject(newObject);
+      if (!_objects.contains(newObject)){
+        addObject(newObject);
+      }
+      else{
+        notifyListeners();
+      }
   }
 
   void WriteValue(Message message){
@@ -90,6 +101,7 @@ class ObjectManager extends ChangeNotifier {
 
     if (message.getSegmentType(2) == thatObject.type){
       thatObject.value = message.getSegmentData(2);
+      notifyListeners();
     }
   }
 

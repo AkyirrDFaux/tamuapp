@@ -21,10 +21,10 @@ enum Types {
   Geometry2D(17),
   GeometryOperation(18),
   Texture2D(19),
-  AnimationFloat(20),
-  AnimationVector(21),
-  AnimationCoord(22),
-  AnimationColour(23),
+  AccGyr(20),
+  Removed2(21),
+  Removed3(22),
+  Removed4(23),
   Operation(24),
   Program(25),
   Integer(26),
@@ -99,13 +99,13 @@ enum Types {
       case 19:
         return Types.Texture2D;
       case 20:
-        return Types.AnimationFloat;
+        return Types.AccGyr;
       case 21:
-        return Types.AnimationVector;
+        return Types.Removed2;
       case 22:
-        return Types.AnimationCoord;
+        return Types.Removed3;
       case 23:
-        return Types.AnimationColour;
+        return Types.Removed4;
       case 24:
         return Types.Operation;
       case 25:
@@ -157,10 +157,10 @@ final Map<Types, IconData> typeIcons = {
   Types.Geometry2D: Icons.square_foot_outlined, // Ruler and angle
   Types.GeometryOperation: Icons.gesture_outlined, // Hand drawing
   Types.Texture2D: Icons.texture_outlined,
-  Types.AnimationFloat: Icons.trending_up_outlined,
-  Types.AnimationVector: Icons.timeline_outlined,
-  Types.AnimationCoord: Icons.control_camera_outlined, // Move/pan icon
-  Types.AnimationColour: Icons.palette_outlined,
+  Types.AccGyr: Icons.gps_not_fixed_outlined,
+  Types.Removed2: Icons.delete_outline,
+  Types.Removed3: Icons.delete_outline,
+  Types.Removed4: Icons.delete_outline,
   Types.Operation: Icons.settings_outlined, // Gears for operations
   Types.Program: Icons.terminal_outlined,
   Types.Integer: Icons.pin_outlined, // Numbered pin

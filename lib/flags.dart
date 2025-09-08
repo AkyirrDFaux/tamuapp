@@ -2,7 +2,7 @@ enum Flags {
   none(0),
   auto(1), // 0b00000001
   none1(2),
-  none2(4),
+  runRead(4),
   runLoop(8), // 0b00001000
   runOnce(16), // 0b00010000
   runOnStartup(32), // 0b00100000

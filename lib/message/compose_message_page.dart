@@ -80,7 +80,7 @@ class _ComposeMessagePageState extends State<ComposeMessagePage> {
                         setState(() {
                           message.setSegmentData(index, newValue);
                         });
-                      },
+                      }, type: message.getSegmentType(index),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,

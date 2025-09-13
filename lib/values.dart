@@ -30,12 +30,14 @@ Map<Types, List<String>> typeToValueNames = {
     "LED",
     "FanPWM",
     "I2C",
-    "I2CClock"
+    "I2CClock",
+    "Servo",
+    "Input"
   ],
   Types.Geometry2D: [
     "None",
     "Box",
-    "Elipse",
+    "Ellipse",
     "Triangle",
     "Polygon",
     "Star",
@@ -68,11 +70,18 @@ Map<Types, List<String>> typeToValueNames = {
   ],
   Types.LEDStrip: [
     "Undefined",
-    "Generic",
+    "Generic RGB",
+    "Generic RGBW"
   ],
   Types.AccGyr: [
     "Undefined",
     "LSM6DS3TRC"
+  ],
+  Types.Input :  [
+  "Undefined",
+  "Button",
+  "ButtonWithLED",
+  "Analog"
   ],
   Types.Program: [
     "None",

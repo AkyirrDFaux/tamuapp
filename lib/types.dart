@@ -22,8 +22,8 @@ enum Types {
   GeometryOperation(18),
   Texture2D(19),
   AccGyr(20),
-  Removed2(21),
-  Removed3(22),
+  Servo(21),
+  Input(22),
   Removed4(23),
   Operation(24),
   Program(25),
@@ -104,9 +104,9 @@ enum Types {
       case 20:
         return Types.AccGyr;
       case 21:
-        return Types.Removed2;
+        return Types.Servo;
       case 22:
-        return Types.Removed3;
+        return Types.Input;
       case 23:
         return Types.Removed4;
       case 24:
@@ -163,8 +163,8 @@ final Map<Types, IconData> typeIcons = {
   Types.GeometryOperation: Icons.gesture_outlined, // Hand drawing
   Types.Texture2D: Icons.texture_outlined,
   Types.AccGyr: Icons.gps_not_fixed_outlined,
-  Types.Removed2: Icons.delete_outline,
-  Types.Removed3: Icons.delete_outline,
+  Types.Servo: Icons.precision_manufacturing_outlined,
+  Types.Input: Icons.input_outlined,
   Types.Removed4: Icons.delete_outline,
   Types.Operation: Icons.settings_outlined, // Gears for operations
   Types.Program: Icons.terminal_outlined,

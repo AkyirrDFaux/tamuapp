@@ -22,11 +22,15 @@ Map<Types, List<String>> typeToValueNames = {
     "None",
     "GPIO",
     "TOut",
+    "SDA",
+    "SCL"
   ],
   Types.PortDriver: [
     "None",
     "LED",
     "FanPWM",
+    "I2C",
+    "I2CClock"
   ],
   Types.Geometry2D: [
     "None",
@@ -60,7 +64,7 @@ Map<Types, List<String>> typeToValueNames = {
   ],
   Types.Display: [
     "Undefined",
-    "Vysi_v1_0",
+    "Vysi v1.0",
   ],
   Types.LEDStrip: [
     "Undefined",

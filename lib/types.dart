@@ -32,7 +32,7 @@ enum Types {
   Number(28),
   ID(29),
   Colour(30),
-  PortAttach(31),
+  Removed1(31),
   Vector2D(32),
   Vector3D(33),
   Coord2D(34),
@@ -124,7 +124,7 @@ enum Types {
       case 30:
         return Types.Colour;
       case 31:
-        return Types.PortAttach;
+        return Types.Removed1;
       case 32:
         return Types.Vector2D;
       case 33:
@@ -173,7 +173,7 @@ final Map<Types, IconData> typeIcons = {
   Types.Number: Icons.looks_one_outlined, // Or more generic: Icons.calculate_outlined
   Types.ID: Icons.tag_outlined,
   Types.Colour: Icons.color_lens_outlined,
-  Types.PortAttach: Icons.link_outlined,
+  Types.Removed1: Icons.delete_outline,
   Types.Vector2D: Icons.open_in_full_outlined, // Expand/vectorial idea
   Types.Vector3D: Icons.navigation_outlined, // Expand/vectorial idea
   Types.Coord2D: Icons.place_outlined,

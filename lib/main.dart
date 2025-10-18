@@ -28,9 +28,7 @@ class MyApp extends StatelessWidget {
 }
 
 /*TODO:
-Flags as icons
-EnumValue editable dialog
-Improve Object page overall
+Improve formatting of values
 
 Object graph navigation (history)
 

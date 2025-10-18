@@ -7,12 +7,18 @@ class Object {
   String name = "Unnamed";
   FlagClass flags = FlagClass();
   List<MapEntry<int, int>> modules = <MapEntry<int, int>>[];
-  dynamic value;
+  List<MapEntry<Types, dynamic>> value = [];
 
   Object({
     required this.type,
     required this.id,
   });
+
+  String get formattedId {
+    final x = id >> 8; // Shift to the right by 8 to get the higher bits
+    final y = id & 0xFF; // Use a bitwise AND with 0xFF to get the lower 8 bits
+    return '$x.$y';
+  }
 
   List<Object> references(List<Object> allObjects) {
     List<Object> result = [];

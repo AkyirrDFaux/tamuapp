@@ -193,171 +193,186 @@ class _ObjectPageState extends State<ObjectPage> {
               ),
             ],
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(right: 8.0),
-                      child: Icon(Icons.tag_outlined),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("ID", style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text(object.id.toString()),
-                        ],
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8.0),
+                        child: Icon(Icons.tag_outlined),
                       ),
-                    ),
-                    // ID is read-only, so no EditField is needed.
-                    // An empty SizedBox keeps the alignment consistent.
-                    const SizedBox(width: 48), // Width of a typical icon button
-                  ],
-                ),
-                const SizedBox(height: 16), // Increased spacing
-
-                // --- NEW: Formatted Type Section ---
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(right: 8.0),
-                      child: Icon(Icons.type_specimen_outlined),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Type", style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text(object.type.toString().split('.').last),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("ID", style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text(object.formattedId),
+                          ],
+                        ),
                       ),
-                    ),
-                    // Type is also read-only.
-                    const SizedBox(width: 48),
-                  ],
-                ),
-                const SizedBox(height: 16), // Increased spacing
+                      // ID is read-only, so no EditField is needed.
+                      // An empty SizedBox keeps the alignment consistent.
+                      const SizedBox(width: 48), // Width of a typical icon button
+                    ],
+                  ),
+                  const SizedBox(height: 16), // Increased spacing
 
-                // --- MODIFIED: Name Section (Label added for consistency) ---
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(right: 8.0),
-                      child: Icon(Icons.label_outline),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Name", style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text(object.name),
-                        ],
+                  // --- NEW: Formatted Type Section ---
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8.0),
+                        child: Icon(Icons.type_specimen_outlined),
                       ),
-                    ),
-                    EditField(
-                      label: 'Name',
-                      initialValue: object.name,
-                      onChanged: (newValue) {
-                        if (newValue != null) {
-                          Message message = Message();
-                          message.addSegment(
-                              Types.Function, Functions.WriteName);
-                          message.addSegment(Types.ID, object.id);
-                          message.addSegment(Types.Text, newValue);
-                          BluetoothManager().sendMessage(message);
-                        }
-                      },
-                        type: Types.Text
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                FlagsIconRow(object: object),
-                const SizedBox(height: 16), // Increased spacing
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Type", style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text(object.type.toString().split('.').last),
+                          ],
+                        ),
+                      ),
+                      // Type is also read-only.
+                      const SizedBox(width: 48),
+                    ],
+                  ),
+                  const SizedBox(height: 16), // Increased spacing
 
-                // --- MODIFIED 'MODULES' SECTION ---
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(right: 8.0),
-                      child: Icon(Icons.device_hub_outlined),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  // --- MODIFIED: Name Section (Label added for consistency) ---
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8.0),
+                        child: Icon(Icons.label_outline),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Name", style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text(object.name),
+                          ],
+                        ),
+                      ),
+                      EditField(
+                          label: 'Name',
+                          initialValue: object.name,
+                          onChanged: (newValue) {
+                            if (newValue != null) {
+                              Message message = Message();
+                              message.addSegment(
+                                  Types.Function, Functions.WriteName);
+                              message.addSegment(Types.ID, object.id);
+                              message.addSegment(Types.Text, newValue);
+                              BluetoothManager().sendMessage(message);
+                            }
+                          },
+                          type: Types.Text
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  FlagsIconRow(object: object),
+                  const SizedBox(height: 16), // Increased spacing
+
+                  // --- MODIFIED 'MODULES' SECTION ---
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8.0),
+                        child: Icon(Icons.device_hub_outlined),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Modules", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ValueDisplay(
+                              value: object.modules,
+                              type: Types.IDList, // Use the correct type for formatting
+                            ),
+                          ],
+                        ),
+                      ),
+                      EditField(
+                          label: 'Modules',
+                          initialValue: object.modules,
+                          onChanged: (newValues) {
+                            if (newValues != null) {
+                              Message message = Message();
+                              message.addSegment(
+                                  Types.Function, Functions.SetModules);
+                              message.addSegment(Types.ID, object.id);
+                              message.addSegment(Types.IDList, newValues);
+                              BluetoothManager().sendMessage(message);
+                            }
+                          },
+                          type: Types.IDList
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16), // Increased spacing
+
+                  // --- MODIFIED 'VALUE' SECTION TO DISPLAY A LIST ---
+                  const Row(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.only(right: 8.0),
+                        child: Icon(Icons.data_object_outlined),
+                      ),
+                      Text("Values", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Iterate through the list of values and display each one in a row
+                  for (var i = 0; i < object.value.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const Text("Modules", style: TextStyle(fontWeight: FontWeight.bold)),
-                          ValueDisplay(
-                            value: object.modules,
-                            type: Types.IDList, // Use the correct type for formatting
+                          const SizedBox(width: 32), // Indent the value rows
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(object.value[i].key.toString().split('.').last, style: const TextStyle(fontWeight: FontWeight.w500)),
+                                ValueDisplay(
+                                  value: object.value[i].value,
+                                  type: object.value[i].key,
+                                ),
+                              ],
+                            ),
                           ),
+                          EditField(
+                              label: "Value",
+                              initialValue: object.value[i].value,
+                              onChanged: (newValue) {
+                                if (newValue != null) {
+                                  // When one value changes, send only the changed value.
+                                  // The ID is the object ID + index + 1.
+                                  Message message = Message();
+                                  message.addSegment(Types.Function, Functions.WriteValue);
+                                  message.addSegment(Types.ID, object.id + i + 1);
+                                  message.addSegment(object.value[i].key, newValue);
+                                  BluetoothManager().sendMessage(message);
+                                }
+                              },
+                              type: object.value[i].key),
                         ],
                       ),
                     ),
-                    EditField(
-                      label: 'Modules',
-                      initialValue: object.modules,
-                      onChanged: (newValues) {
-                        if (newValues != null) {
-                          Message message = Message();
-                          message.addSegment(
-                              Types.Function, Functions.SetModules);
-                          message.addSegment(Types.ID, object.id);
-                          message.addSegment(Types.IDList, newValues);
-                          BluetoothManager().sendMessage(message);
-                        }
-                      },
-                        type: Types.IDList
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16), // Increased spacing
-
-                // --- MODIFIED 'VALUE' SECTION ---
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(right: 8.0),
-                      child: Icon(Icons.data_object_outlined),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Value", style: TextStyle(fontWeight: FontWeight.bold)),
-                          ValueDisplay(
-                            value: object.value,
-                            type: object.type, // Dynamically use the object's type
-                          ),
-                        ],
-                      ),
-                    ),
-                    EditField(
-                        label: "Value",
-                        initialValue: object.value,
-                        onChanged: (newValues) {
-                          if (newValues != null) {
-                            Message message = Message();
-                            message.addSegment(
-                                Types.Function, Functions.WriteValue);
-                            message.addSegment(Types.ID, object.id);
-                            message.addSegment(object.type, newValues);
-                            BluetoothManager().sendMessage(message);
-                          }
-                        },
-                        type: object.type),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

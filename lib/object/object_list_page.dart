@@ -88,7 +88,7 @@ class ObjectListPage extends StatelessWidget {
                 return ListTile(
                   leading: Icon(getIconForType(object.type)),
                   title: Text(object.name),
-                  subtitle: Text('${object.id.toString()} - ${object.type.name}'),
+                  subtitle: Text('${object.formattedId} - ${object.type.name}'),
                   trailing: object.type == Types.Program
                       ? Row(
                     mainAxisSize: MainAxisSize.min,

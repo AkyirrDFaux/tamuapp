@@ -28,6 +28,13 @@ class GraphNode {
     this.displayLayer = 0,
   });
 
+  // ADD THIS GETTER
+  String get formattedId {
+    final x = id >> 8;      // Shift right by 8
+    final y = id & 0xFF;    // Get the lower 8 bits
+    return '$x.$y';
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -656,7 +663,7 @@ class GraphPainter extends CustomPainter {
       )..layout(maxWidth: nodeWidth - (8 + 18 + 6 + 8));
       namePainter.paint(canvas, nodeRect.topLeft + const Offset(8 + 18 + 6, 7));
 
-      final typeAndIdText = '${node.id} - $typeName';
+      final typeAndIdText = '${node.formattedId} - $typeName';
       final typeAndIdPainter = TextPainter(
         text: TextSpan(text: typeAndIdText, style: textStyle.copyWith(fontSize: 11)),
         maxLines: 1,

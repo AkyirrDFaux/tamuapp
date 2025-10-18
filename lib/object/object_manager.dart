@@ -78,9 +78,11 @@ class ObjectManager extends ChangeNotifier {
       if(message.getSegmentType(5) == Types.IDList){
         newObject.modules = message.getSegmentData(5);
       }
-      if(message.getSegmentType(6) == newObject.type){
-        newObject.value = message.getSegmentData(6);
+      List<MapEntry<Types, dynamic>> values = [];
+      for (int i = 6; i < message.segmentCount; i++) {
+        values.add(MapEntry(message.getSegmentType(i), message.getSegmentData(i)));
       }
+      newObject.value = values;
 
       if (!_objects.contains(newObject)){
         addObject(newObject);
@@ -92,18 +94,42 @@ class ObjectManager extends ChangeNotifier {
 
   void WriteValue(Message message){
     Object? thatObject;
+    int id = 0;
     if(message.getSegmentType(1) == Types.ID){
-      thatObject = getObjectById(message.getSegmentData(1));
+      id = message.getSegmentData(1);
+      // To get the lowest byte of the ID, we can perform a bitwise AND with 0xFF.
+      // 0xFF in hexadecimal is 11111111 in binary.
+      // This operation will keep the lower 8 bits and set all higher bits to 0.
+      int objectId = id & 0xFFFFFF00;
+      thatObject = getObjectById(objectId);
     }
     if (thatObject == null){
       return;
     }
 
-    if (message.getSegmentType(2) == thatObject.type){
-      thatObject.value = message.getSegmentData(2);
-      notifyListeners();
+    int lowestByte = id & 0xFF; // [1, 4]
+
+    if (lowestByte != 0) {
+      // If the lowest byte is not zero, there's only one value in the message.
+      if (message.segmentCount > 2) {
+        int index = lowestByte - 1;
+        if (index < thatObject.value.length) {
+          // Update the value at the specified index. [3]
+          thatObject.value[index] = MapEntry(message.getSegmentType(2), message.getSegmentData(2));
+        }
+      }
+    } else {
+      // Otherwise, read all values from the message.
+      List<MapEntry<Types, dynamic>> values = [];
+      for (int i = 2; i < message.segmentCount; i++) {
+        values.add(MapEntry(message.getSegmentType(i), message.getSegmentData(i)));
+      }
+      thatObject.value = values;
     }
+
+    notifyListeners();
   }
+
 
   void SetFlags(Message message) {
     if (message.getSegmentType(1) == Types.ID &&

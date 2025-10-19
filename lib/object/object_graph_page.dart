@@ -102,7 +102,7 @@ class _ObjectGraphPageState extends State<ObjectGraphPage> {
         id: obj.id,
         name: obj.name,
         type: obj.type,
-        childrenIds: obj.modules.map((e) => e.value).toList(),
+        childrenIds: obj.modules.map((e) => e.value & 0xFFFFFF00).toList(),
       );
     }
     return tempNodesMap;

@@ -9,6 +9,7 @@ import 'bluetooth/bluetooth_manager.dart';
 import 'message/queue_page.dart';
 import 'object/object_list_page.dart';
 import 'object/object_graph_page.dart';
+import 'favorites_page.dart'; // Import the new favorites page
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -198,12 +199,24 @@ class _MainPage extends State<MainPage> {
             ),
             const SizedBox(width: 8),
             // Right Column
-            // ... (Object List and Object Graph buttons remain the same)
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
+                  _buildMenuButton(
+                    title: 'Favourites',
+                    icon: Icons.star_outline,
+                    textColor: defaultButtonTextColor,
+                    iconColor: defaultButtonTextColor,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const FavoritesPage(),
+                        ),
+                      );
+                    },
+                  ),
                   _buildMenuButton(
                     title: 'Object\nList',
                     icon: Icons.view_list_outlined,
@@ -219,7 +232,7 @@ class _MainPage extends State<MainPage> {
                   ),
                   _buildMenuButton(
                     title: 'Object\nGraph',
-                    icon: Icons.device_hub_outlined,
+                    icon: Icons.hub_outlined,
                     textColor: defaultButtonTextColor,
                     iconColor: defaultButtonTextColor,
                     onPressed: () {

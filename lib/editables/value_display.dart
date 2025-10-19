@@ -46,6 +46,8 @@ class ValueDisplay extends StatelessWidget {
 
     // Use the explicit type if provided
     switch (type) {
+      case Types.ID:
+        return _formatId(value);
       case Types.IDList:
         return _formatObjectList(value);
       case Types.Coord2D:
@@ -111,23 +113,33 @@ class ValueDisplay extends StatelessWidget {
       dynamic obj;
       try {
         obj = ObjectManager().objects.firstWhere(
-              (o) => o.id == entry.value,
+              (o) => o.id == entry.value & 0xFFFFFF00,
         );
       } catch (e) {
         obj = null;
       }
 
+      final formattedId = _formatId(entry.value);
+
       if (obj == null) {
-        displayLines.add("${entry.value} : (None)");
+        displayLines.add("$formattedId : (None)");
       } else {
         final typeName = obj.type.toString().split('.').last;
-        displayLines.add("${entry.value} : ${obj.name} ($typeName)");
+        displayLines.add("$formattedId : ${obj.name} ($typeName)");
       }
       expectedKey++;
     }
 
     return displayLines.join('\n');
   }
+
+  /// Formats the ID into a string representation 'x.y'.
+  String _formatId(int id) {
+    final x = id >> 8; // Shift to the right by 8 to get the higher bits
+    final y = id & 0xFF; // Use a bitwise AND with 0xFF to get the lower 8 bits
+    return '$x.$y';
+  }
+
 
   /// Formats a Coord2D object.
   String _formatCoord2D(dynamic coordValue) {

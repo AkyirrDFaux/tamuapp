@@ -91,6 +91,8 @@ Map<Types, List<String>> typeToValueNames = {
   Types.Operation: [
     "None",
     "Equal",
+    "Extract",
+    "Combine",
     "IsEqual",
     "IsGreater",
     "IsSmaller",

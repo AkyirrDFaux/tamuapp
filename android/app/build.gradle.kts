@@ -6,9 +6,9 @@ plugins {
 }
 
 android {
-    namespace = "com.example.appble"
+    namespace = "tamu.app.tamuapp"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "28.0.13004108"
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

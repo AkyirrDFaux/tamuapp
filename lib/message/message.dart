@@ -1,8 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert';
 
-import 'package:appble/values.dart';
-
+import '../values.dart';
 import '../functions.dart';
 import '../flags.dart';
 import '../object/object.dart';

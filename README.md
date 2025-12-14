@@ -1,6 +1,6 @@
-# appble
+# tamuapp
 
-A new Flutter project.
+Tamu App
 
 ## Getting Started
 

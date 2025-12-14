@@ -1,4 +1,4 @@
-package com.example.appble
+package tamu.app.tamuapp
 
 import io.flutter.embedding.android.FlutterActivity
 

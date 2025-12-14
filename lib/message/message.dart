@@ -190,6 +190,13 @@ class Message {
             byteData.getFloat32(4, Endian.little)),
             Vector2D(byteData.getFloat32(8, Endian.little),
                 byteData.getFloat32(12, Endian.little)));
+      case Types.Coord3D:
+        final data = segment.sublist(1);
+        final byteData = ByteData.sublistView(data);
+        return Coord3D(
+          Vector3D(byteData.getFloat32(0, Endian.little), byteData.getFloat32(4, Endian.little), byteData.getFloat32(8, Endian.little)),
+          Vector3D(byteData.getFloat32(12, Endian.little), byteData.getFloat32(16, Endian.little), byteData.getFloat32(20, Endian.little)),
+        );
       case Types.Colour:
         final data = segment.sublist(1);
         final byteData = ByteData.sublistView(data);
@@ -213,10 +220,12 @@ class Message {
           final data = segment.sublist(1);
           final byteData = ByteData.sublistView(data);
           switch (type){
-            case Types.Type:
-              return Types.fromValue(byteData.getUint8(0));
+            case Types.ObjectType:
+              return ObjectTypes.fromValue(byteData.getUint8(0));
             case Types.Function:
               return Functions.fromValue(byteData.getUint8(0));
+            case Types.Bool:
+              return byteData.getUint8(0) == 1;
             default:
               return byteData.getUint8(0);
           }
@@ -299,6 +308,16 @@ class Message {
           throw ArgumentError("Data must be an int for Types.byte");
         }
         break;
+      case Types.Bool:
+        if (data is bool) {
+          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
+          newSegment[0] = segmentType.value;
+          newSegment[1] = data ? 1 : 0;
+          segments[index] = newSegment;
+        } else {
+          throw ArgumentError("Data must be a bool for Types.Bool");
+        }
+        break;
       case Types.Vector2D:
         if (data is Vector2D) {
           final newSegment = Uint8List(Types.getSize(segmentType) + 1);
@@ -336,6 +355,22 @@ class Message {
           throw ArgumentError("Data must be a Coord2D for Types.coord2D");
         }
         break;
+      case Types.Coord3D:
+        if (data is Coord3D) {
+          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
+          newSegment[0] = segmentType.value;
+          final byteData = ByteData.sublistView(newSegment, 1);
+          byteData.setFloat32(0, data.Position.X, Endian.little);
+          byteData.setFloat32(4, data.Position.Y, Endian.little);
+          byteData.setFloat32(8, data.Position.Z, Endian.little);
+          byteData.setFloat32(12, data.Rotation.X, Endian.little);
+          byteData.setFloat32(16, data.Rotation.Y, Endian.little);
+          byteData.setFloat32(20, data.Rotation.Z, Endian.little);
+          segments[index] = newSegment;
+        } else {
+          throw ArgumentError("Data must be a Coord3D for Types.coord3D");
+        }
+        break;
       case Types.Colour:
         if (data is Colour) {
           final newSegment = Uint8List(Types.getSize(segmentType) + 1);
@@ -350,14 +385,23 @@ class Message {
         }
         break;
       case Types.Function:
-      case Types.Type:
-        if (data is Functions || data is Types) {
+        if (data is Functions) {
           final newSegment = Uint8List(Types.getSize(segmentType) + 1);
           newSegment[0] = segmentType.value;
           newSegment[1] = data.value;
           segments[index] = newSegment;
         } else {
-          throw ArgumentError("Data must be a Enum");
+          throw ArgumentError("Data must be a Function");
+        }
+        break;
+      case Types.ObjectType:
+        if (data is ObjectTypes) {
+          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
+          newSegment[0] = segmentType.value;
+          newSegment[1] = data.value;
+          segments[index] = newSegment;
+        } else {
+          throw ArgumentError("Data must be an ObjectType");
         }
         break;
       case Types.IDList:

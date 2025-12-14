@@ -83,7 +83,7 @@ class _NewObjectDialogState extends State<NewObjectDialog> {
             if (_formKey.currentState!.validate()) {
               Message message = Message();
               message.addSegment(Types.Function, Functions.CreateObject);
-              message.addSegment(Types.Type, _selectedType);
+              message.addSegment(Types.ObjectType, _selectedType);
               message.addSegment(Types.ID, int.parse(_idController.text));
               BluetoothManager().sendMessage(message);
               Navigator.of(context).pop();

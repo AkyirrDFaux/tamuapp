@@ -54,9 +54,9 @@ class ObjectManager extends ChangeNotifier {
   void ReadObject(Message message){
     Object newObject;
       if(message.getSegmentType(2) == Types.ID
-      && message.getSegmentType(1) == Types.Type){
+      && message.getSegmentType(1) == Types.ObjectType){
         int id = message.getSegmentData(2);
-        Types type = message.getSegmentData(1);
+        ObjectTypes type = message.getSegmentData(1);
         Object? existingObject = getObjectById(id);
         if (existingObject != null) {
           newObject = existingObject;

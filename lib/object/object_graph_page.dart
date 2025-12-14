@@ -12,7 +12,7 @@ import 'object_page.dart';
 class GraphNode {
   final int id;
   final String name;
-  final Types type;
+  final ObjectTypes type;
   List<int> childrenIds;
   List<int> parentIds;
   Offset? position;

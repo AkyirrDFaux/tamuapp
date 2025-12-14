@@ -2,7 +2,7 @@ import '../flags.dart';
 import '../types.dart';
 
 class Object {
-  final Types type;
+  final ObjectTypes type;
   int id;
   String name = "Unnamed";
   FlagClass flags = FlagClass();
@@ -63,6 +63,18 @@ class Coord2D {
   @override
   String toString() {
     return 'Coord2D(Position: $Position, Rotation: $Rotation)';
+  }
+}
+
+class Coord3D {
+  Vector3D Position = Vector3D(0, 0, 0);
+  Vector3D Rotation = Vector3D(1, 0, 0);
+
+  Coord3D(this.Position, this.Rotation);
+
+  @override
+  String toString() {
+    return 'Coord3D(Position: $Position, Rotation: $Rotation)';
   }
 }
 

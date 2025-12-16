@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:universal_ble/universal_ble.dart';
 import 'bluetooth_manager.dart';
 
 class DiscoveryPage extends StatefulWidget {
@@ -13,10 +13,7 @@ class DiscoveryPage extends StatefulWidget {
 
 class _DiscoveryPageState extends State<DiscoveryPage> {
   final BluetoothManager _bluetoothManager = BluetoothManager();
-  List<ScanResult> _devices = [];
-  bool _isDiscovering = false;
-  StreamSubscription<List<ScanResult>>? _scanSubscription;
-  bool _isDisposed = false;
+  final List<BleDevice> _devices = [];
 
   @override
   void initState() {
@@ -26,46 +23,39 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
 
   @override
   void dispose() {
-    _isDisposed = true;
-    _stopDiscovery();
-    _scanSubscription?.cancel();
+    _stopDiscovery(notify: false);
     super.dispose();
   }
 
   void _startDiscovery() async {
+    if (!mounted) return;
     setState(() {
-      _isDiscovering = true;
       _devices.clear();
     });
-    await _bluetoothManager.requestEnableBluetooth();
-    _bluetoothManager.startScan();
-    _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-      if (_isDisposed) return;
-      for (ScanResult r in results) {
+    UniversalBle.onScanResult = (device) {
+      Future.microtask(() {
         if (!mounted) return;
         setState(() {
-          final existingIndex = _devices.indexWhere((element) => element.device.remoteId == r.device.remoteId);
+          final existingIndex = _devices.indexWhere((element) => element.deviceId == device.deviceId);
           if (existingIndex >= 0) {
-            _devices[existingIndex] = r;
+            _devices[existingIndex] = device;
           } else {
-            _devices.add(r);
+            _devices.add(device);
           }
-          _devices.sort((a, b) => b.rssi.compareTo(a.rssi)); // Sort by RSSI
+          _devices.sort((a, b) => (b.rssi ?? -100).compareTo((a.rssi ?? -100))); // Sort by RSSI
         });
-      }
-    });
-  }
-
-  void _stopDiscovery() {
-    _bluetoothManager.stopScan();
-    if (!_isDisposed) {
-      setState(() {
-        _isDiscovering = false;
       });
-    }
+    };
+    await _bluetoothManager.requestEnableBluetooth();
+    await _bluetoothManager.startScan();
   }
 
-  Color _getRssiColor(int rssi) {
+  void _stopDiscovery({bool notify = true}) {
+    _bluetoothManager.stopScan(notify: notify);
+  }
+
+  Color _getRssiColor(int? rssi) {
+    if (rssi == null) return Colors.grey;
     if (rssi >= -50) {
       return Colors.green; // Strong signal
     } else if (rssi >= -70) {
@@ -83,7 +73,7 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
       appBar: AppBar(
         title: const Text('Discover Devices'),
         actions: [
-          if (_isDiscovering)
+          if (_bluetoothManager.isScanning)
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Row(
@@ -108,17 +98,17 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
           final device = _devices[index];
           final rssiColor = _getRssiColor(device.rssi);
           return ListTile(
-            title: Text(device.device.platformName),
+            title: Text(device.name ?? 'Unknown Device'),
             subtitle: Row(
               children: [
-                Text('ID: ${device.device.remoteId.str} | '),
+                Text('ID: ${device.deviceId} | '),
                 Icon(Icons.signal_cellular_alt, color: rssiColor),
-                Text('RSSI: ${device.rssi} dBm', style: TextStyle(color: rssiColor)),
+                Text('RSSI: ${device.rssi ?? 'N/A'} dBm', style: TextStyle(color: rssiColor)),
               ],
             ),
             onTap: () {
-              _bluetoothManager.setSelectedDevice(device.device);
-              Navigator.of(context).pop(device.device);
+              _bluetoothManager.setSelectedDevice(device);
+              Navigator.of(context).pop(device);
             },
           );
         },

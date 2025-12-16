@@ -9,7 +9,7 @@ import 'flags.dart';
 import 'functions.dart';
 
 class FavoritesPage extends StatelessWidget {
-  const FavoritesPage({Key? key}) : super(key: key);
+  const FavoritesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +59,7 @@ class FavoritesPage extends StatelessWidget {
 class FavoriteProgramCard extends StatelessWidget {
   final Object program;
 
-  const FavoriteProgramCard({Key? key, required this.program}) : super(key: key);
+  const FavoriteProgramCard({super.key, required this.program});
 
   @override
   Widget build(BuildContext context) {

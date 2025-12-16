@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:universal_ble/universal_ble.dart' as universal_ble;
 
 import 'bluetooth/discovery_page.dart';
 import 'bluetooth/bluetooth_manager.dart';
@@ -33,13 +33,10 @@ class _MainPage extends State<MainPage> {
     Color? iconColor,
     Color? textColor, // Optional: for specific text color
   }) {
-    final defaultBackgroundColor = Colors.grey[300]!; // Added ! to assert non-null for the default
+    final defaultBackgroundColor = Colors.grey[300]!;
     final effectiveBackgroundColor = backgroundColor ?? defaultBackgroundColor;
 
-    // Determine default icon and text color based on background
     final bool isDarkBackground = ThemeData.estimateBrightnessForColor(effectiveBackgroundColor) == Brightness.dark;
-    // The line above is now safe because effectiveBackgroundColor will always be non-null
-    // due to defaultBackgroundColor being non-null.
 
     final defaultContentColor = isDarkBackground ? Colors.white : Colors.black;
 
@@ -109,16 +106,14 @@ class _MainPage extends State<MainPage> {
                       if (manager.selectedDevice == null) {
                         buttonText = 'Explore\nDevices';
                       } else if (manager.isConnecting) {
-                        buttonText = 'Connecting to\n${manager.selectedDevice!.platformName}';
-                        // currentButtonColor = Colors.orangeAccent; // Optional: for connecting state
+                        buttonText = 'Connecting to\n${manager.selectedDevice!.name}';
                       } else if (manager.isConnected) {
-                        buttonText = 'Connected to\n${manager.selectedDevice!.platformName}';
+                        buttonText = 'Connected to\n${manager.selectedDevice!.name}';
                         currentButtonColor = bluetoothConnectedColor;
                         currentTextColor = bluetoothConnectedTextColor;
                         currentIconColor = bluetoothConnectedTextColor;
                       } else {
-                        buttonText = 'Connection Failed\n${manager.selectedDevice!.platformName}';
-                        // currentButtonColor = Colors.redAccent; // Optional: for failed state
+                        buttonText = 'Connection Failed\n${manager.selectedDevice!.name}';
                       }
 
                       return _buildMenuButton(
@@ -127,30 +122,22 @@ class _MainPage extends State<MainPage> {
                         backgroundColor: currentButtonColor,
                         textColor: currentTextColor,
                         iconColor: currentIconColor,
-                        onPressed: () async { // <-- RESTORED/CORRECTED onPressed LOGIC HERE
+                        onPressed: () async {
                           if (await Permission.bluetoothScan.isDenied || await Permission.bluetoothConnect.isDenied) {
-                            // Request permissions if not already granted.
-                            // This is a simplified version; consider more robust permission handling.
                             await [Permission.bluetoothScan, Permission.bluetoothConnect].request();
-                            // Optionally, check again and return if still denied.
                           }
 
-                          if (manager.bluetoothState != BluetoothAdapterState.on) {
-                            // Try to enable Bluetooth.
-                            // This platform-specific call might need to be handled carefully.
-                            // For simplicity, we assume flutter_blue_plus handles showing a prompt if needed.
+                          if (manager.bluetoothState != universal_ble.AvailabilityState.poweredOn) {
                             try {
-                              await FlutterBluePlus.turnOn();
+                              await universal_ble.UniversalBle.enableBluetooth();
                             } catch (e) {
-                              // Handle error if Bluetooth cannot be turned on (e.g., user denies)
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Bluetooth could not be enabled.')),
                               );
                               return;
                             }
-                            // Wait a bit for the adapter state to update
                             await Future.delayed(const Duration(milliseconds: 500));
-                            if (manager.bluetoothState != BluetoothAdapterState.on) {
+                            if (manager.bluetoothState != universal_ble.AvailabilityState.poweredOn) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Please enable Bluetooth.')),
                               );
@@ -161,20 +148,16 @@ class _MainPage extends State<MainPage> {
                           if (manager.isConnected) {
                             manager.disconnect();
                           } else {
-                            // If not connected, or no device selected, go to discovery
-                            final BluetoothDevice? selectedDevice =
+                            final universal_ble.BleDevice? selectedDevice =
                             await Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (context) {
-                                  // Ensure DiscoveryPage requests necessary permissions if it doesn't already
                                   return const DiscoveryPage();
                                 },
                               ),
                             );
                             if (selectedDevice != null) {
                               manager.setSelectedDevice(selectedDevice);
-                              // The BluetoothManager should handle the connection attempt
-                              // when a device is selected.
                             }
                           }
                         },

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../flags.dart';
 import '../types.dart';
 import 'coord2d_dialog.dart';
 import 'flag_dialog.dart';

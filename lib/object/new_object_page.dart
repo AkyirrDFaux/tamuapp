@@ -50,7 +50,7 @@ class _NewObjectDialogState extends State<NewObjectDialog> {
                 },
               ),
               DropdownButtonFormField<Types>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Type',
                 ),

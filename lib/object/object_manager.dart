@@ -165,7 +165,7 @@ class ObjectManager extends ChangeNotifier {
         SetFlags(message);
         break;
       default:
-        print("Not implemented:" + message.getSegmentData(0).toString());
+        print("Not implemented:${message.getSegmentData(0)}");
         break;
     }
   }

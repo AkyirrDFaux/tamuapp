@@ -7,11 +7,11 @@ class FlagDialog extends StatefulWidget {
   final ValueChanged<FlagClass> onChanged;
 
   const FlagDialog({
-    Key? key,
+    super.key,
     required this.label,
     required this.initialValue,
     required this.onChanged,
-  }) : super(key: key);
+  });
 
   @override
   _FlagDialogState createState() => _FlagDialogState();

@@ -11,7 +11,7 @@ import 'object.dart';
 import 'new_object_page.dart';
 
 class ObjectListPage extends StatelessWidget {
-  const ObjectListPage({Key? key}) : super(key: key);
+  const ObjectListPage({super.key});
 
   @override
   Widget build(BuildContext context) {

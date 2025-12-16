@@ -86,10 +86,7 @@ class ChatBubble extends StatelessWidget {
           (message.direction == MessageDirection.output ? Colors.blue[100] : Colors.grey[300]),
           borderRadius: BorderRadius.circular(10.0),
         ),
-        child: Text(message.timestamp.hour.toString() + ":" +
-            message.timestamp.minute.toString() + ":" +
-            message.timestamp.second.toString() + " - " +
-            message.message.toString()),
+        child: Text("${message.timestamp.hour}:${message.timestamp.minute}:${message.timestamp.second} - ${message.message}"),
       ),
     );
   }

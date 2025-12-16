@@ -259,9 +259,9 @@ class _ObjectGraphPageState extends State<ObjectGraphPage> {
     } else {
       // --- Focused View: Existing Horizontal Layered Arrangement ---
       double maxNodesInAnyLayer = 0;
-      nodesByLayer.values.forEach((layerNodes) {
+      for (var layerNodes in nodesByLayer.values) {
         maxNodesInAnyLayer = max(maxNodesInAnyLayer, layerNodes.length.toDouble());
-      });
+      }
 
       final double contentWidthForWidestLayer = maxNodesInAnyLayer * nodeWidth +
           (maxNodesInAnyLayer > 0 ? (maxNodesInAnyLayer - 1) * horizontalSpacing : 0);

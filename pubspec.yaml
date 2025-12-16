@@ -30,7 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_blue_plus: ^1.35.3 # Use the latest version
+  universal_ble: ^0.21.1
   permission_handler: ^11.4.0 # Use the latest version
   provider: ^6.1.2
 
@@ -38,6 +38,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  collection: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

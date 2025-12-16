@@ -88,8 +88,9 @@ class _ValueDialogState extends State<ValueDialog> {
         ),
         TextButton(
           // Use a FilledButton for the primary action to make it stand out.
-          child: const Text('Confirm'),
           onPressed: _onConfirm,
+          // Use a FilledButton for the primary action to make it stand out.
+          child: const Text('Confirm'),
         ),
       ],
     );

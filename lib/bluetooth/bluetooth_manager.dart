@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:universal_ble/universal_ble.dart';
 
 import '../message/message.dart';
 import '../message/message_queue.dart';
@@ -20,63 +20,87 @@ class BluetoothManager extends ChangeNotifier {
   // 3. Private Constructor
   BluetoothManager._internal() {
     // Listen to Bluetooth state changes
-    FlutterBluePlus.adapterState.listen((BluetoothAdapterState state) {
-      _updateBluetoothState(state);
-    });
+    UniversalBle.onAvailabilityChange = (state) {
+      Future.microtask(() {
+        _updateBluetoothState(state);
+      });
+    };
+
+    UniversalBle.onConnectionChange = (String deviceId, bool isConnected, String? errorMessage) {
+      Future.microtask(() async {
+        if (deviceId != _device?.deviceId) return;
+
+        _isConnected = isConnected;
+        _isConnecting = false;
+
+        if (_isConnected) {
+          try {
+            final services = await UniversalBle.discoverServices(_device!.deviceId);
+            _services.clear();
+            _services.addAll(services);
+            await _findCharacteristics();
+          } catch (e) {
+            _isConnected = false;
+          }
+        } else {
+          // Cleanup on disconnect
+          _writeCharacteristic = null;
+          _notifyCharacteristic = null;
+          _writeCharacteristicServiceUuid = null;
+          _notifyCharacteristicServiceUuid = null;
+          _services.clear();
+          _receivedData = Uint8List(0);
+          UniversalBle.onValueChange = null;
+        }
+        notifyListeners();
+      });
+    };
   }
 
-  StreamSubscription<List<ScanResult>>? _scanSubscription;
-  StreamSubscription<List<int>>? _characteristicSubscription;
-  BluetoothDevice? _device;
-  BluetoothCharacteristic? _writeCharacteristic;
-  BluetoothCharacteristic? _notifyCharacteristic;
-  final List<BluetoothService> _services = [];
+  BleDevice? _device;
+  BleCharacteristic? _writeCharacteristic;
+  String? _writeCharacteristicServiceUuid;
+  BleCharacteristic? _notifyCharacteristic;
+  String? _notifyCharacteristicServiceUuid;
+  final List<BleService> _services = [];
 
-  BluetoothAdapterState _bluetoothState = BluetoothAdapterState.unknown;
+  AvailabilityState _bluetoothState = AvailabilityState.unsupported;
   bool _isConnected = false;
   bool _isConnecting = false;
+  bool _isScanning = false;
 
   bool get isConnecting => _isConnecting;
   bool get isConnected => _isConnected;
-  BluetoothAdapterState get bluetoothState => _bluetoothState;
-  get selectedDevice => _device;
+  bool get isScanning => _isScanning;
+  AvailabilityState get bluetoothState => _bluetoothState;
+  BleDevice? get selectedDevice => _device;
 
   Uint8List _receivedData = Uint8List(0);
 
-  void _updateBluetoothState(BluetoothAdapterState state) {
+  void _updateBluetoothState(AvailabilityState state) {
     _bluetoothState = state;
     notifyListeners();
   }
 
   Future<void> requestEnableBluetooth() async {
-    if (await FlutterBluePlus.isSupported == false) {
-      return;
-    }
-    if (await FlutterBluePlus.adapterState.first == BluetoothAdapterState.on) {
-      try {
-        await FlutterBluePlus.turnOn();
-      } catch (e) {
-        print("Error turning on Bluetooth: $e");
-      }
-    }
+    await UniversalBle.enableBluetooth();
   }
 
   Future<void> startScan() async {
-    if (_scanSubscription != null) {
-      return;
-    }
-    _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-    });
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 30));
+    if (_isScanning) return;
+    _isScanning = true;
+    notifyListeners();
+    await UniversalBle.startScan();
   }
 
-  Future<void> stopScan() async {
-    if (_scanSubscription == null) {
-      return;
+  Future<void> stopScan({bool notify = true}) async {
+    if (!_isScanning) return;
+    _isScanning = false;
+    if (notify) {
+      notifyListeners();
     }
-    await FlutterBluePlus.stopScan();
-    _scanSubscription?.cancel();
-    _scanSubscription = null;
+    UniversalBle.onScanResult = null;
+    await UniversalBle.stopScan();
   }
 
   Future<void> connect() async {
@@ -89,12 +113,7 @@ class BluetoothManager extends ChangeNotifier {
     _isConnecting = true;
     notifyListeners();
     try {
-      await _device!.connect();
-      _isConnected = true;
-      _isConnecting = false;
-      _services.addAll(await _device!.discoverServices());
-      _findCharacteristics();
-      notifyListeners();
+      await UniversalBle.connect(_device!.deviceId);
     } catch (error) {
       _isConnecting = false;
       _isConnected = false;
@@ -102,49 +121,64 @@ class BluetoothManager extends ChangeNotifier {
     }
   }
 
-  void _findCharacteristics() {
-    for (BluetoothService service in _services) {
-      for (BluetoothCharacteristic characteristic in service.characteristics) {
-        if (characteristic.properties.write && _writeCharacteristic == null) {
+  Future<void> _findCharacteristics() async {
+    try {
+      final mtu = await UniversalBle.requestMtu(_device!.deviceId, 512);
+      print('Negotiated MTU: $mtu');
+    } catch (e) {
+      print('Error requesting MTU: $e');
+    }
+    for (BleService service in _services) {
+      for (BleCharacteristic characteristic in service.characteristics) {
+        if (characteristic.properties.contains(CharacteristicProperty.write) && _writeCharacteristic == null) {
           _writeCharacteristic = characteristic;
+          _writeCharacteristicServiceUuid = service.uuid;
         }
-        if (characteristic.properties.notify && _notifyCharacteristic == null) {
+        if (characteristic.properties.contains(CharacteristicProperty.notify) && _notifyCharacteristic == null) {
           _notifyCharacteristic = characteristic;
+          _notifyCharacteristicServiceUuid = service.uuid;
           _startNotify();
         }
       }
     }
   }
 
-  void _startNotify() {
+  void _startNotify() async {
     if (_notifyCharacteristic == null) {
       return;
     }
-    _notifyCharacteristic!.setNotifyValue(true);
-    _characteristicSubscription = _notifyCharacteristic!.lastValueStream.listen(_onDataReceived,);
+    await UniversalBle.subscribeNotifications(
+      _device!.deviceId,
+      _notifyCharacteristicServiceUuid!,
+      _notifyCharacteristic!.uuid,
+    );
+    UniversalBle.onValueChange = _onDataReceived;
   }
 
-  void _onDataReceived(List<int> data) {
-    _notifyCharacteristic!.lastValueStream.drain();
-    // Append the new data to the received data buffer
-    final newData = Uint8List(_receivedData.length + data.length);
-    newData.setRange(0, _receivedData.length, _receivedData);
-    newData.setRange(_receivedData.length, newData.length, data);
-    _receivedData = newData;
+  void _onDataReceived(String deviceId, String characteristicId, Uint8List value) {
+    // Filter notifications to only the characteristic we are interested in.
+    if (characteristicId != _notifyCharacteristic?.uuid) {
+      return;
+    }
+    //print('Received data: ${value.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ')}');
 
-    final hexString = data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ');
-    //debugPrint('Received data (hex): $hexString');
+    Future.microtask(() {
+      // Append the new data to the received data buffer
+      final newData = Uint8List(_receivedData.length + value.length);
+      newData.setRange(0, _receivedData.length, _receivedData);
+      newData.setRange(_receivedData.length, newData.length, value);
+      _receivedData = newData;
 
-    // Process the message buffer
-    _processMessage();
-    notifyListeners();
+      // Process the message buffer
+      _processMessage();
+      notifyListeners();
+    });
   }
 
   void _processMessage() {
     while (_receivedData.length >= 4) {
       final byteData = ByteData.sublistView(_receivedData);
       final messageSize = byteData.getUint32(0, Endian.little);
-
 
       if (_receivedData.length >= messageSize + 4) {
         // We have a complete message
@@ -167,7 +201,7 @@ class BluetoothManager extends ChangeNotifier {
     }
   }
 
-  void sendMessage(Message message) async{
+  void sendMessage(Message message) async {
     if (_writeCharacteristic == null || !_isConnected) {
       print("Error: Not connected to a device.");
       return;
@@ -199,50 +233,46 @@ class BluetoothManager extends ChangeNotifier {
       Uint8List lengthPrefix = lengthBytes.buffer.asUint8List();
 
       // 4. Combine Length and Message
-      Uint8List combinedData = Uint8List(lengthPrefix.length + messageData.length);
+      Uint8List combinedData =
+          Uint8List(lengthPrefix.length + messageData.length);
       combinedData.setRange(0, lengthPrefix.length, lengthPrefix);
-      combinedData.setRange(lengthPrefix.length, combinedData.length, messageData);
+      combinedData.setRange(
+          lengthPrefix.length, combinedData.length, messageData);
 
       // 5. Send Data
-      if (_writeCharacteristic!.properties.writeWithoutResponse) {
-        // Use writeWithoutResponse if supported
-        await _writeCharacteristic!.write(combinedData, withoutResponse: true);
-    print("Message sent without response.");
-    } else if (_writeCharacteristic!.properties.write) {
-    // Use regular write if writeWithoutResponse is not supported
-    await _writeCharacteristic!.write(combinedData, withoutResponse: false);
-    print("Message sent with response.");
-    } else {
-    print("Error: The characteristic does not support writing.");
-    return;
-    }
+      await UniversalBle.write(
+        _device!.deviceId,
+        _writeCharacteristicServiceUuid!,
+        _writeCharacteristic!.uuid,
+        combinedData,
+        withoutResponse: _writeCharacteristic!.properties.contains(CharacteristicProperty.writeWithoutResponse),
+      );
 
-    QueueEntry entry = QueueEntry(
-    message: message,
-    timestamp: DateTime.now(),
-    direction: MessageDirection.output);
-    MessageQueue().addEntry(entry);
+      QueueEntry entry = QueueEntry(
+          message: message,
+          timestamp: DateTime.now(),
+          direction: MessageDirection.output);
+      MessageQueue().addEntry(entry);
     } catch (error) {
-    print("Error sending message: $error");
-    // Handle the error appropriately (e.g., disconnect, retry, etc.)
+      print("Error sending message: $error");
+      // Handle the error appropriately (e.g., disconnect, retry, etc.)
     }
   }
 
   void disconnect() {
-    _characteristicSubscription?.cancel();
-    _characteristicSubscription = null;
-    _device?.disconnect();
-    _isConnected = false;
-    _isConnecting = false;
-    _writeCharacteristic = null;
-    _notifyCharacteristic = null;
-    _services.clear();
-    _receivedData = Uint8List(0);
-    notifyListeners();
+    if (_device != null) {
+      UniversalBle.disconnect(_device!.deviceId);
+    }
   }
 
   // Set the selected device
-  void setSelectedDevice(BluetoothDevice? selectedDevice) {
+  void setSelectedDevice(BleDevice? selectedDevice) {
+    if (_device?.deviceId == selectedDevice?.deviceId) {
+      if (!_isConnected) {
+        connect();
+      }
+      return;
+    }
     if (isConnected) {
       disconnect();
     }

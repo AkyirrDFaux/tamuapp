@@ -104,11 +104,8 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   Future<void> connect() async {
-    if (_device == null) {
+    if (_device == null || _isConnecting || _isConnected) {
       return;
-    }
-    if (_isConnected) {
-      disconnect();
     }
     _isConnecting = true;
     notifyListeners();
@@ -268,7 +265,7 @@ class BluetoothManager extends ChangeNotifier {
   // Set the selected device
   void setSelectedDevice(BleDevice? selectedDevice) {
     if (_device?.deviceId == selectedDevice?.deviceId) {
-      if (!_isConnected) {
+      if (!_isConnected && !_isConnecting) {
         connect();
       }
       return;

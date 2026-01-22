@@ -31,7 +31,8 @@ enum Types {
   GeometryOperation(45),
   Texture2D(46),
   Operation(47),
-  Program(48);
+  Program(48),
+  PortType(64);
 
   final int value;
   const Types(this.value);
@@ -39,9 +40,9 @@ enum Types {
   static int getSize(Types type) {
     if (type == Types.Undefined) {
       return 0;
-    } else if (type.value <= Types.Byte.value || type.value >= Types.ObjectType.value) {
+    } else if (type.value <= Types.Byte.value || (type.value >= Types.ObjectType.value && type.value < Types.PortType.value) ) {
       return 1;
-    } else if (type.value <= Types.Colour.value) {
+    } else if (type.value <= Types.Colour.value || type.value >= Types.PortType.value) {
       return 4;
     } else if (type == Types.Vector2D) {
       return 8;
@@ -82,7 +83,10 @@ enum ObjectTypes {
   Servo(12),
   Input(13),
   Operation(14),
-  Program(15);
+  Program(15),
+  I2C(16),
+  UART(17),
+  SPI(18);
 
   final int value;
   const ObjectTypes(this.value);
@@ -114,6 +118,9 @@ final Map<ObjectTypes, IconData> objectTypeIcons = {
   ObjectTypes.Input: Icons.input_outlined,
   ObjectTypes.Operation: Icons.settings_outlined,
   ObjectTypes.Program: Icons.terminal_outlined,
+  ObjectTypes.I2C: Icons.account_tree_outlined,
+  ObjectTypes.UART: Icons.account_tree_outlined,
+  ObjectTypes.SPI: Icons.account_tree_outlined,
 };
 
 final Map<Types, IconData> typeIcons = {
@@ -148,6 +155,7 @@ final Map<Types, IconData> typeIcons = {
   Types.Texture2D: Icons.texture_outlined,
   Types.Operation: Icons.settings_outlined,
   Types.Program: Icons.terminal_outlined,
+  Types.PortType: Icons.lan_outlined,
 };
 
 // Example of how to use it:

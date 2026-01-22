@@ -230,6 +230,11 @@ class Message {
               return byteData.getUint8(0);
           }
         }
+        if (Types.getSize(type) == 4) {
+          final data = segment.sublist(1);
+          final byteData = ByteData.sublistView(data);
+          return byteData.getUint32(0, Endian.little);
+        }
         else {
           return segment.sublist(1);
         }
@@ -423,6 +428,12 @@ class Message {
           final newSegment = Uint8List(Types.getSize(segmentType) + 1);
           newSegment[0] = segmentType.value;
           ByteData.sublistView(newSegment).setUint8(1, data);
+          segments[index] = newSegment;
+        }
+        else if (data is int && Types.getSize(segmentType) == 4) {
+          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
+          newSegment[0] = segmentType.value;
+          ByteData.sublistView(newSegment).setUint32(1, data, Endian.little);
           segments[index] = newSegment;
         }
         else {

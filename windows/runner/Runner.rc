@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "tamu.app" "\0"
+            VALUE "CompanyName", "tamu" "\0"
             VALUE "FileDescription", "tamuapp" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "tamuapp" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 tamu.app. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 tamu. All rights reserved." "\0"
             VALUE "OriginalFilename", "tamuapp.exe" "\0"
             VALUE "ProductName", "tamuapp" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

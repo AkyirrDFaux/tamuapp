@@ -9,7 +9,6 @@ import 'bluetooth/bluetooth_manager.dart';
 import 'message/queue_page.dart';
 import 'object/object_list_page.dart';
 import 'object/object_graph_page.dart';
-import 'favorites_page.dart'; // Import the new favorites page
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -102,18 +101,19 @@ class _MainPage extends State<MainPage> {
                       Color? currentButtonColor;
                       Color? currentTextColor = defaultButtonTextColor;
                       Color? currentIconColor = defaultButtonTextColor;
+                      String deviceName = manager.selectedDevice is universal_ble.BleDevice ? manager.selectedDevice.name : manager.selectedDevice.toString();
 
                       if (manager.selectedDevice == null) {
                         buttonText = 'Explore\nDevices';
                       } else if (manager.isConnecting) {
-                        buttonText = 'Connecting to\n${manager.selectedDevice!.name}';
+                        buttonText = 'Connecting to\n$deviceName';
                       } else if (manager.isConnected) {
-                        buttonText = 'Connected to\n${manager.selectedDevice!.name}';
+                        buttonText = 'Connected to\n$deviceName';
                         currentButtonColor = bluetoothConnectedColor;
                         currentTextColor = bluetoothConnectedTextColor;
                         currentIconColor = bluetoothConnectedTextColor;
                       } else {
-                        buttonText = 'Connection Failed\n${manager.selectedDevice!.name}';
+                        buttonText = 'Connection Failed\n$deviceName';
                       }
 
                       return _buildMenuButton(
@@ -148,7 +148,7 @@ class _MainPage extends State<MainPage> {
                           if (manager.isConnected) {
                             manager.disconnect();
                           } else {
-                            final universal_ble.BleDevice? selectedDevice =
+                            final selectedDevice =
                             await Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (context) {
@@ -187,19 +187,6 @@ class _MainPage extends State<MainPage> {
                 mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  _buildMenuButton(
-                    title: 'Favourites',
-                    icon: Icons.star_outline,
-                    textColor: defaultButtonTextColor,
-                    iconColor: defaultButtonTextColor,
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const FavoritesPage(),
-                        ),
-                      );
-                    },
-                  ),
                   _buildMenuButton(
                     title: 'Object\nList',
                     icon: Icons.view_list_outlined,

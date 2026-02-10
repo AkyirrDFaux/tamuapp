@@ -3,10 +3,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:universal_ble/universal_ble.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 
 import '../message/message.dart';
 import '../message/message_queue.dart';
 import '../object/object_manager.dart';
+
+enum ConnectionType { ble, uart }
 
 class BluetoothManager extends ChangeNotifier {
   // 1. Private Static Instance
@@ -28,14 +31,14 @@ class BluetoothManager extends ChangeNotifier {
 
     UniversalBle.onConnectionChange = (String deviceId, bool isConnected, String? errorMessage) {
       Future.microtask(() async {
-        if (deviceId != _device?.deviceId) return;
+        if (_connectionType != ConnectionType.ble || deviceId != _bleDevice?.deviceId) return;
 
         _isConnected = isConnected;
         _isConnecting = false;
 
         if (_isConnected) {
           try {
-            final services = await UniversalBle.discoverServices(_device!.deviceId);
+            final services = await UniversalBle.discoverServices(_bleDevice!.deviceId);
             _services.clear();
             _services.addAll(services);
             await _findCharacteristics();
@@ -57,12 +60,21 @@ class BluetoothManager extends ChangeNotifier {
     };
   }
 
-  BleDevice? _device;
+  ConnectionType _connectionType = ConnectionType.ble;
+  
+  // BLE specific variables
+  BleDevice? _bleDevice;
   BleCharacteristic? _writeCharacteristic;
   String? _writeCharacteristicServiceUuid;
   BleCharacteristic? _notifyCharacteristic;
   String? _notifyCharacteristicServiceUuid;
   final List<BleService> _services = [];
+  
+  // UART specific variables
+  SerialPort? _serialPort;
+  String? _serialPortName;
+  StreamSubscription<Uint8List>? _serialPortSubscription;
+
 
   AvailabilityState _bluetoothState = AvailabilityState.unsupported;
   bool _isConnected = false;
@@ -73,7 +85,8 @@ class BluetoothManager extends ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isScanning => _isScanning;
   AvailabilityState get bluetoothState => _bluetoothState;
-  BleDevice? get selectedDevice => _device;
+  
+  dynamic get selectedDevice => _connectionType == ConnectionType.ble ? _bleDevice : _serialPortName;
 
   Uint8List _receivedData = Uint8List(0);
 
@@ -104,13 +117,26 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   Future<void> connect() async {
-    if (_device == null || _isConnecting || _isConnected) {
+    if (selectedDevice == null || _isConnecting || _isConnected) {
       return;
     }
     _isConnecting = true;
     notifyListeners();
+
     try {
-      await UniversalBle.connect(_device!.deviceId);
+      if (_connectionType == ConnectionType.ble) {
+        await UniversalBle.connect(_bleDevice!.deviceId);
+      } else if (_connectionType == ConnectionType.uart) {
+        _serialPort = SerialPort(_serialPortName!);
+        if (!_serialPort!.openReadWrite()) {
+          print("Failed to open serial port: ${SerialPort.lastError}");
+          throw Exception("Failed to open serial port");
+        }
+        _isConnected = true;
+        _isConnecting = false;
+        _startSerialPortListen();
+        notifyListeners();
+      }
     } catch (error) {
       _isConnecting = false;
       _isConnected = false;
@@ -120,7 +146,7 @@ class BluetoothManager extends ChangeNotifier {
 
   Future<void> _findCharacteristics() async {
     try {
-      final mtu = await UniversalBle.requestMtu(_device!.deviceId, 512);
+      final mtu = await UniversalBle.requestMtu(_bleDevice!.deviceId, 512);
       print('Negotiated MTU: $mtu');
     } catch (e) {
       print('Error requesting MTU: $e');
@@ -145,21 +171,40 @@ class BluetoothManager extends ChangeNotifier {
       return;
     }
     await UniversalBle.subscribeNotifications(
-      _device!.deviceId,
+      _bleDevice!.deviceId,
       _notifyCharacteristicServiceUuid!,
       _notifyCharacteristic!.uuid,
     );
-    UniversalBle.onValueChange = _onDataReceived;
+    UniversalBle.onValueChange = _onBleDataReceived;
+  }
+  
+  void _startSerialPortListen() {
+    if (_serialPort == null || !_serialPort!.isOpen) return;
+    
+    final reader = SerialPortReader(_serialPort!);
+    _serialPortSubscription = reader.stream.listen(_onUartDataReceived, onError: (error) {
+        print("Serial port error: $error");
+        disconnect();
+    }, onDone: (){
+        print("Serial port closed");
+        disconnect();
+    });
   }
 
-  void _onDataReceived(String deviceId, String characteristicId, Uint8List value) {
+  void _onBleDataReceived(String deviceId, String characteristicId, Uint8List value) {
     // Filter notifications to only the characteristic we are interested in.
     if (characteristicId != _notifyCharacteristic?.uuid) {
       return;
     }
-    //print('Received data: ${value.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ')}');
+    _handleReceivedData(value);
+  }
 
-    Future.microtask(() {
+  void _onUartDataReceived(Uint8List value) {
+    _handleReceivedData(value);
+  }
+
+  void _handleReceivedData(Uint8List value){
+     Future.microtask(() {
       // Append the new data to the received data buffer
       final newData = Uint8List(_receivedData.length + value.length);
       newData.setRange(0, _receivedData.length, _receivedData);
@@ -199,7 +244,7 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   void sendMessage(Message message) async {
-    if (_writeCharacteristic == null || !_isConnected) {
+    if (!_isConnected) {
       print("Error: Not connected to a device.");
       return;
     }
@@ -237,13 +282,20 @@ class BluetoothManager extends ChangeNotifier {
           lengthPrefix.length, combinedData.length, messageData);
 
       // 5. Send Data
-      await UniversalBle.write(
-        _device!.deviceId,
-        _writeCharacteristicServiceUuid!,
-        _writeCharacteristic!.uuid,
-        combinedData,
-        withoutResponse: _writeCharacteristic!.properties.contains(CharacteristicProperty.writeWithoutResponse),
-      );
+      if (_connectionType == ConnectionType.ble) {
+        if (_writeCharacteristic == null) return;
+        await UniversalBle.write(
+          _bleDevice!.deviceId,
+          _writeCharacteristicServiceUuid!,
+          _writeCharacteristic!.uuid,
+          combinedData,
+          withoutResponse: _writeCharacteristic!.properties.contains(CharacteristicProperty.writeWithoutResponse),
+        );
+      } else if (_connectionType == ConnectionType.uart) {
+        if (_serialPort == null || !_serialPort!.isOpen) return;
+        _serialPort!.write(combinedData);
+      }
+
 
       QueueEntry entry = QueueEntry(
           message: message,
@@ -257,25 +309,53 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   void disconnect() {
-    if (_device != null) {
-      UniversalBle.disconnect(_device!.deviceId);
+    if (_isConnected) {
+       if (_connectionType == ConnectionType.ble && _bleDevice != null) {
+        UniversalBle.disconnect(_bleDevice!.deviceId);
+      } else if (_connectionType == ConnectionType.uart && _serialPort != null) {
+        _serialPortSubscription?.cancel();
+        _serialPort?.close();
+        _serialPort = null;
+        _serialPortSubscription = null;
+        _isConnected = false;
+        notifyListeners();
+      }
     }
   }
 
-  // Set the selected device
-  void setSelectedDevice(BleDevice? selectedDevice) {
-    if (_device?.deviceId == selectedDevice?.deviceId) {
-      if (!_isConnected && !_isConnecting) {
-        connect();
+  void setSelectedDevice(dynamic device) {
+     if (device is BleDevice) {
+      if (_bleDevice?.deviceId == device.deviceId) {
+        if (!_isConnected && !_isConnecting) {
+          connect();
+        }
+        return;
       }
-      return;
+      if (isConnected) {
+        disconnect();
+      }
+      _connectionType = ConnectionType.ble;
+      _bleDevice = device;
+      _serialPortName = null;
+    } else if (device is String) {
+      if (_serialPortName == device) {
+        if (!_isConnected && !_isConnecting) {
+          connect();
+        }
+        return;
+      }
+      if (isConnected) {
+        disconnect();
+      }
+      _connectionType = ConnectionType.uart;
+      _serialPortName = device;
+      _bleDevice = null;
+    } else {
+      return; // Or throw an error
     }
-    if (isConnected) {
-      disconnect();
-    }
-    _device = selectedDevice;
+
     notifyListeners();
-    if (_device != null) {
+    if (selectedDevice != null) {
       connect();
     }
   }

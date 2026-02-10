@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:universal_ble/universal_ble.dart';
 import 'bluetooth_manager.dart';
 
@@ -14,10 +15,12 @@ class DiscoveryPage extends StatefulWidget {
 class _DiscoveryPageState extends State<DiscoveryPage> {
   final BluetoothManager _bluetoothManager = BluetoothManager();
   final List<BleDevice> _devices = [];
+  List<String> _serialPorts = [];
 
   @override
   void initState() {
     super.initState();
+    _discoverPorts();
     _startDiscovery();
   }
 
@@ -25,6 +28,12 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
   void dispose() {
     _stopDiscovery(notify: false);
     super.dispose();
+  }
+
+  void _discoverPorts() {
+    setState(() {
+      _serialPorts = SerialPort.availablePorts;
+    });
   }
 
   void _startDiscovery() async {
@@ -88,29 +97,44 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
           else
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: _startDiscovery,
+              onPressed: (){
+                _discoverPorts();
+                _startDiscovery();
+              },
             ),
         ],
       ),
       body: ListView.builder(
-        itemCount: _devices.length,
+        itemCount: _devices.length + _serialPorts.length,
         itemBuilder: (context, index) {
-          final device = _devices[index];
-          final rssiColor = _getRssiColor(device.rssi);
-          return ListTile(
-            title: Text(device.name ?? 'Unknown Device'),
-            subtitle: Row(
-              children: [
-                Text('ID: ${device.deviceId} | '),
-                Icon(Icons.signal_cellular_alt, color: rssiColor),
-                Text('RSSI: ${device.rssi ?? 'N/A'} dBm', style: TextStyle(color: rssiColor)),
-              ],
-            ),
-            onTap: () {
-              _bluetoothManager.setSelectedDevice(device);
-              Navigator.of(context).pop(device);
-            },
-          );
+          if (index < _serialPorts.length) {
+            final portName = _serialPorts[index];
+            return ListTile(
+              title: Text(portName),
+              subtitle: const Text('UART Device'),
+              onTap: () {
+                _bluetoothManager.setSelectedDevice(portName);
+                Navigator.of(context).pop(portName);
+              },
+            );
+          } else {
+            final device = _devices[index - _serialPorts.length];
+            final rssiColor = _getRssiColor(device.rssi);
+            return ListTile(
+              title: Text(device.name ?? 'Unknown Device'),
+              subtitle: Row(
+                children: [
+                  Text('ID: ${device.deviceId} | '),
+                  Icon(Icons.signal_cellular_alt, color: rssiColor),
+                  Text('RSSI: ${device.rssi ?? 'N/A'} dBm', style: TextStyle(color: rssiColor)),
+                ],
+              ),
+              onTap: () {
+                _bluetoothManager.setSelectedDevice(device);
+                Navigator.of(context).pop(device);
+              },
+            );
+          }
         },
       ),
     );

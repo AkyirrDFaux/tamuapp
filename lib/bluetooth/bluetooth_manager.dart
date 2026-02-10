@@ -61,7 +61,7 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   ConnectionType _connectionType = ConnectionType.ble;
-  
+
   // BLE specific variables
   BleDevice? _bleDevice;
   BleCharacteristic? _writeCharacteristic;
@@ -69,7 +69,7 @@ class BluetoothManager extends ChangeNotifier {
   BleCharacteristic? _notifyCharacteristic;
   String? _notifyCharacteristicServiceUuid;
   final List<BleService> _services = [];
-  
+
   // UART specific variables
   SerialPort? _serialPort;
   String? _serialPortName;
@@ -85,7 +85,7 @@ class BluetoothManager extends ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isScanning => _isScanning;
   AvailabilityState get bluetoothState => _bluetoothState;
-  
+
   dynamic get selectedDevice => _connectionType == ConnectionType.ble ? _bleDevice : _serialPortName;
 
   Uint8List _receivedData = Uint8List(0);
@@ -177,10 +177,10 @@ class BluetoothManager extends ChangeNotifier {
     );
     UniversalBle.onValueChange = _onBleDataReceived;
   }
-  
+
   void _startSerialPortListen() {
     if (_serialPort == null || !_serialPort!.isOpen) return;
-    
+
     final reader = SerialPortReader(_serialPort!);
     _serialPortSubscription = reader.stream.listen(_onUartDataReceived, onError: (error) {
         print("Serial port error: $error");
@@ -199,8 +199,57 @@ class BluetoothManager extends ChangeNotifier {
     _handleReceivedData(value);
   }
 
+  final List<int> _rawBuffer = [];
+
+  int _calculateCrc8(List<int> data) {
+    int crc = 0x00;
+    for (int b in data) {
+      crc ^= b;
+      for (int j = 0; j < 8; j++) {
+        if ((crc & 0x80) != 0) {
+          crc = ((crc << 1) ^ 0x31) & 0xFF;
+        } else {
+          crc = (crc << 1) & 0xFF;
+        }
+      }
+    }
+    return crc;
+  }
+
   void _onUartDataReceived(Uint8List value) {
-    _handleReceivedData(value);
+    _rawBuffer.addAll(value);
+
+    while (_rawBuffer.length >= 64) {
+      if (_rawBuffer[0] == 0xFA) {
+        int receivedCrc = _rawBuffer[1];
+        int dataLen = _rawBuffer[2];
+
+        if (dataLen <= 60) {
+          // 1. Verify CRC (Calculated over Len + Data)
+          int calculatedCrc = _calculateCrc8(_rawBuffer.sublist(2, 3 + dataLen));
+
+          if (receivedCrc == calculatedCrc) {
+            // 2. Verify Footer
+            int footerIdx = 3 + dataLen;
+            if (_rawBuffer[footerIdx] == 0xBF) {
+
+              // SUCCESS
+              final payload = Uint8List.fromList(_rawBuffer.sublist(3, 3 + dataLen));
+              _handleReceivedData(payload);
+
+            } else {
+              print("Corruption: Footer BF missing at $footerIdx");
+            }
+          } else {
+            print("Corruption: CRC Mismatch (Expected $receivedCrc, got $calculatedCrc)");
+          }
+        }
+
+        _rawBuffer.removeRange(0, 64);
+      } else {
+        _rawBuffer.removeAt(0); // Sync hunt
+      }
+    }
   }
 
   void _handleReceivedData(Uint8List value){
@@ -293,7 +342,28 @@ class BluetoothManager extends ChangeNotifier {
         );
       } else if (_connectionType == ConnectionType.uart) {
         if (_serialPort == null || !_serialPort!.isOpen) return;
-        _serialPort!.write(combinedData);
+
+        const int maxData = 60;
+        int offset = 0;
+
+        while (offset < combinedData.length) {
+          final packet = Uint8List(64); // Automatically zero-padded
+          int toCopy = (combinedData.length - offset > maxData) ? maxData : combinedData.length - offset;
+
+          packet[0] = 0xFA;
+          packet[2] = toCopy;
+
+          // Copy payload
+          List.copyRange(packet, 3, combinedData, offset, offset + toCopy);
+
+          packet[3 + toCopy] = 0xBF;
+
+          // CRC over [Len + Data]
+          packet[1] = _calculateCrc8(packet.sublist(2, 3 + toCopy));
+
+          _serialPort!.write(packet);
+          offset += toCopy;
+        }
       }
 
 

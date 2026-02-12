@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
@@ -20,7 +21,9 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
   @override
   void initState() {
     super.initState();
-    _discoverPorts();
+    if (!Platform.isAndroid) {
+      _discoverPorts();
+    }
     _startDiscovery();
   }
 
@@ -31,6 +34,7 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
   }
 
   void _discoverPorts() {
+    if (Platform.isAndroid) return;
     setState(() {
       _serialPorts = SerialPort.availablePorts;
     });
@@ -98,16 +102,18 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: (){
-                _discoverPorts();
+                if (!Platform.isAndroid) {
+                  _discoverPorts();
+                }
                 _startDiscovery();
               },
             ),
         ],
       ),
       body: ListView.builder(
-        itemCount: _devices.length + _serialPorts.length,
+        itemCount: _devices.length + (Platform.isAndroid ? 0 : _serialPorts.length),
         itemBuilder: (context, index) {
-          if (index < _serialPorts.length) {
+          if (!Platform.isAndroid && index < _serialPorts.length) {
             final portName = _serialPorts[index];
             return ListTile(
               title: Text(portName),
@@ -118,7 +124,9 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
               },
             );
           } else {
-            final device = _devices[index - _serialPorts.length];
+            final deviceIndex = Platform.isAndroid ? index : index - _serialPorts.length;
+            if (deviceIndex >= _devices.length) return null; // Should not happen
+            final device = _devices[deviceIndex];
             final rssiColor = _getRssiColor(device.rssi);
             return ListTile(
               title: Text(device.name ?? 'Unknown Device'),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,10 @@ import '../message/message_queue.dart';
 import '../object/object_manager.dart';
 
 enum ConnectionType { ble, uart }
+
+const String UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const String CHARACTERISTIC_UUID_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // For Writing
+const String CHARACTERISTIC_UUID_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // For Notifying
 
 class BluetoothManager extends ChangeNotifier {
   // 1. Private Static Instance
@@ -127,6 +132,10 @@ class BluetoothManager extends ChangeNotifier {
       if (_connectionType == ConnectionType.ble) {
         await UniversalBle.connect(_bleDevice!.deviceId);
       } else if (_connectionType == ConnectionType.uart) {
+        if (Platform.isAndroid) {
+          print("UART not supported on Android");
+          return;
+        }
         _serialPort = SerialPort(_serialPortName!);
         if (!_serialPort!.openReadWrite()) {
           print("Failed to open serial port: ${SerialPort.lastError}");
@@ -151,18 +160,36 @@ class BluetoothManager extends ChangeNotifier {
     } catch (e) {
       print('Error requesting MTU: $e');
     }
+
+    print("Discovering specific UART characteristics...");
+
     for (BleService service in _services) {
-      for (BleCharacteristic characteristic in service.characteristics) {
-        if (characteristic.properties.contains(CharacteristicProperty.write) && _writeCharacteristic == null) {
-          _writeCharacteristic = characteristic;
-          _writeCharacteristicServiceUuid = service.uuid;
-        }
-        if (characteristic.properties.contains(CharacteristicProperty.notify) && _notifyCharacteristic == null) {
-          _notifyCharacteristic = characteristic;
-          _notifyCharacteristicServiceUuid = service.uuid;
-          _startNotify();
+      // Only look inside the UART Service
+      if (service.uuid.toLowerCase() == UART_SERVICE_UUID) {
+
+        for (BleCharacteristic characteristic in service.characteristics) {
+          String charUuid = characteristic.uuid.toLowerCase();
+
+          // Match the RX characteristic (for writing data TO the device)
+          if (charUuid == CHARACTERISTIC_UUID_RX) {
+            _writeCharacteristic = characteristic;
+            _writeCharacteristicServiceUuid = service.uuid;
+            print('Matched Write (RX): ${characteristic.uuid}');
+          }
+
+          // Match the TX characteristic (for receiving data FROM the device)
+          if (charUuid == CHARACTERISTIC_UUID_TX) {
+            _notifyCharacteristic = characteristic;
+            _notifyCharacteristicServiceUuid = service.uuid;
+            print('Matched Notify (TX): ${characteristic.uuid}');
+            _startNotify();
+          }
         }
       }
+    }
+
+    if (_writeCharacteristic == null || _notifyCharacteristic == null) {
+      print("Warning: Could not find all UART characteristics.");
     }
   }
 
@@ -179,7 +206,7 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   void _startSerialPortListen() {
-    if (_serialPort == null || !_serialPort!.isOpen) return;
+    if (Platform.isAndroid || _serialPort == null || !_serialPort!.isOpen) return;
 
     final reader = SerialPortReader(_serialPort!);
     _serialPortSubscription = reader.stream.listen(_onUartDataReceived, onError: (error) {
@@ -217,6 +244,7 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   void _onUartDataReceived(Uint8List value) {
+    if (Platform.isAndroid) return;
     _rawBuffer.addAll(value);
 
     while (_rawBuffer.length >= 64) {
@@ -253,6 +281,7 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   void _handleReceivedData(Uint8List value){
+    //print('Incoming <<<: ${value.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ')}');
      Future.microtask(() {
       // Append the new data to the received data buffer
       final newData = Uint8List(_receivedData.length + value.length);
@@ -330,6 +359,8 @@ class BluetoothManager extends ChangeNotifier {
       combinedData.setRange(
           lengthPrefix.length, combinedData.length, messageData);
 
+      //print('Outgoing >>>: ${combinedData.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
       // 5. Send Data
       if (_connectionType == ConnectionType.ble) {
         if (_writeCharacteristic == null) return;
@@ -341,7 +372,7 @@ class BluetoothManager extends ChangeNotifier {
           withoutResponse: _writeCharacteristic!.properties.contains(CharacteristicProperty.writeWithoutResponse),
         );
       } else if (_connectionType == ConnectionType.uart) {
-        if (_serialPort == null || !_serialPort!.isOpen) return;
+        if (Platform.isAndroid || _serialPort == null || !_serialPort!.isOpen) return;
 
         const int maxData = 60;
         int offset = 0;
@@ -383,6 +414,7 @@ class BluetoothManager extends ChangeNotifier {
        if (_connectionType == ConnectionType.ble && _bleDevice != null) {
         UniversalBle.disconnect(_bleDevice!.deviceId);
       } else if (_connectionType == ConnectionType.uart && _serialPort != null) {
+        if (Platform.isAndroid) return;
         _serialPortSubscription?.cancel();
         _serialPort?.close();
         _serialPort = null;
@@ -408,6 +440,7 @@ class BluetoothManager extends ChangeNotifier {
       _bleDevice = device;
       _serialPortName = null;
     } else if (device is String) {
+      if (Platform.isAndroid) return;
       if (_serialPortName == device) {
         if (!_isConnected && !_isConnecting) {
           connect();

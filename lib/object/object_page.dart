@@ -188,6 +188,24 @@ class _ObjectPageState extends State<ObjectPage> {
                 },
               ),
               IconButton(
+                icon: const Icon(Icons.save),
+                onPressed: () {
+                  Message message = Message();
+                  message.addSegment(Types.Function, Functions.SaveObject);
+                  message.addSegment(Types.ID, object.id);
+                  BluetoothManager().sendMessage(message);
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.memory),
+                onPressed: () {
+                  Message message = Message();
+                  message.addSegment(Types.Function, Functions.ReadFile);
+                  message.addSegment(Types.ID, object.id);
+                  BluetoothManager().sendMessage(message);
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: _refreshObject,
               ),

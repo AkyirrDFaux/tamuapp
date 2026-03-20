@@ -66,6 +66,7 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   ConnectionType _connectionType = ConnectionType.ble;
+  ConnectionType get connectionType => _connectionType;
 
   // BLE specific variables
   BleDevice? _bleDevice;
@@ -280,16 +281,20 @@ class BluetoothManager extends ChangeNotifier {
     }
   }
 
-  void _handleReceivedData(Uint8List value){
-    //print('Incoming <<<: ${value.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ')}');
-     Future.microtask(() {
-      // Append the new data to the received data buffer
-      final newData = Uint8List(_receivedData.length + value.length);
-      newData.setRange(0, _receivedData.length, _receivedData);
-      newData.setRange(_receivedData.length, newData.length, value);
-      _receivedData = newData;
+  String toHexLog(Uint8List data) {
+    return data.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ');
+  }
 
-      // Process the message buffer
+  void _handleReceivedData(Uint8List value) {
+    // RAW LOG: Every byte coming off the wire
+    print('BLE/UART IN <<<: ${toHexLog(value)}');
+
+    Future.microtask(() {
+      final builder = BytesBuilder(copy: false);
+      builder.add(_receivedData);
+      builder.add(value);
+      _receivedData = builder.takeBytes();
+
       _processMessage();
       notifyListeners();
     });
@@ -298,70 +303,40 @@ class BluetoothManager extends ChangeNotifier {
   void _processMessage() {
     while (_receivedData.length >= 4) {
       final byteData = ByteData.sublistView(_receivedData);
-      final messageSize = byteData.getUint32(0, Endian.little);
+      final totalSize = byteData.getUint16(0, Endian.little);
 
-      if (_receivedData.length >= messageSize + 4) {
-        // We have a complete message
-        final messageData = _receivedData.sublist(0, messageSize + 4);
+      if (_receivedData.length >= totalSize) {
+        final messageBytes = _receivedData.sublist(0, totalSize);
+
+        // LOG: Full reconstructed packet before parsing
+        print('FRAME RECV [Size $totalSize]: ${toHexLog(messageBytes)}');
+
+        final incomingMessage = Message.fromBytes(messageBytes);
 
         QueueEntry entry = QueueEntry(
-            message: Message.fromBytes(messageData),
+            message: incomingMessage,
             timestamp: DateTime.now(),
             direction: MessageDirection.input);
+
         MessageQueue().addEntry(entry);
         ObjectManager().runMessage(entry.message);
 
-        // Clear the buffer
-        _receivedData = _receivedData.sublist(messageSize + 4);
-        notifyListeners();
+        _receivedData = _receivedData.sublist(totalSize);
       } else {
-        // Incomplete message, wait for more data
         break;
       }
     }
   }
 
   void sendMessage(Message message) async {
-    if (!_isConnected) {
-      print("Error: Not connected to a device.");
-      return;
-    }
+    if (!_isConnected) return;
 
     try {
-      // 1. Convert Message to Uint8List
-      int totalLength = 0;
-      for (var list in message.segments) {
-        totalLength += list.length;
-      }
+      Uint8List combinedData = message.pack();
 
-      // Create a new Uint8List with the total length.
-      Uint8List messageData = Uint8List(totalLength);
+      // LOG: The packed C++ style message
+      print('SEND PACKET [Size ${combinedData.length}]: ${toHexLog(combinedData)}');
 
-      // Copy the data from each list into the combined list.
-      int offset = 0;
-      for (var list in message.segments) {
-        messageData.setRange(offset, offset + list.length, list);
-        offset += list.length;
-      } // Assuming you have this method in your Message class
-
-      // 2. Calculate Message Length
-      int messageLength = messageData.length;
-
-      // 3. Create Length Prefix
-      ByteData lengthBytes = ByteData(4);
-      lengthBytes.setUint32(0, messageLength, Endian.little);
-      Uint8List lengthPrefix = lengthBytes.buffer.asUint8List();
-
-      // 4. Combine Length and Message
-      Uint8List combinedData =
-          Uint8List(lengthPrefix.length + messageData.length);
-      combinedData.setRange(0, lengthPrefix.length, lengthPrefix);
-      combinedData.setRange(
-          lengthPrefix.length, combinedData.length, messageData);
-
-      //print('Outgoing >>>: ${combinedData.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ')}');
-
-      // 5. Send Data
       if (_connectionType == ConnectionType.ble) {
         if (_writeCharacteristic == null) return;
         await UniversalBle.write(
@@ -397,15 +372,13 @@ class BluetoothManager extends ChangeNotifier {
         }
       }
 
-
-      QueueEntry entry = QueueEntry(
+      MessageQueue().addEntry(QueueEntry(
           message: message,
           timestamp: DateTime.now(),
-          direction: MessageDirection.output);
-      MessageQueue().addEntry(entry);
+          direction: MessageDirection.output));
+
     } catch (error) {
       print("Error sending message: $error");
-      // Handle the error appropriately (e.g., disconnect, retry, etc.)
     }
   }
 

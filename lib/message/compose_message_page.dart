@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 import '../bluetooth/bluetooth_manager.dart';
 import '../editables/editable_field.dart';
 import '../types.dart';
@@ -109,4 +109,4 @@ class _ComposeMessagePageState extends State<ComposeMessagePage> {
       ),
     );
   }
-}
+}*/

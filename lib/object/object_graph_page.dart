@@ -1,4 +1,4 @@
-import 'dart:math';
+/*import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart'; // For firstWhereOrNull
@@ -95,7 +95,7 @@ class _ObjectGraphPageState extends State<ObjectGraphPage> {
     _showRootView(); // Show root view after processing
   }
 
-  Map<int, GraphNode> _createGraphNodes(List<app_object.Object> objects) {
+  Map<int, GraphNode> _createGraphNodes(List<app_object.NodeObject> objects) {
     final tempNodesMap = <int, GraphNode>{};
     for (var obj in objects) {
       tempNodesMap[obj.id] = GraphNode(
@@ -424,7 +424,7 @@ class _ObjectGraphPageState extends State<ObjectGraphPage> {
   void _handleNodeTap(GraphNode tappedNode) {
     // If the tapped node is already focused (and is the main focused node at layer 0)
     if (_focusedNodeId == tappedNode.id && tappedNode.displayLayer == 0) {
-      final app_object.Object? obj = _objectManager.objects
+      final app_object.NodeObject? obj = _objectManager.objects
           .firstWhereOrNull((o) => o.id == tappedNode.id);
       if (obj != null) {
         Navigator.of(context).push(
@@ -728,3 +728,4 @@ bool setEquals<T>(Set<T>? a, Set<T>? b) {
   }
   return true;
 }
+*/

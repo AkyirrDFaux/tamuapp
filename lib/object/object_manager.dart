@@ -8,165 +8,247 @@ import 'dart:collection';
 
 class ObjectManager extends ChangeNotifier {
   static final ObjectManager _instance = ObjectManager._internal();
-
-  factory ObjectManager() {
-    return _instance;
-  }
-
+  factory ObjectManager() => _instance;
   ObjectManager._internal();
 
-  final List<Object> _objects = [];
-  UnmodifiableListView<Object> get objects => UnmodifiableListView(_objects);
+  /// Key: fullAddress (String) e.g., "0.0.1"
+  final Map<String, NodeObject> _objects = {};
 
+  UnmodifiableListView<NodeObject> get objects => UnmodifiableListView(_objects.values);
 
-
-  void reloadObjects() {
-    // Clear the existing objects
-    _objects.clear();
-
-    Message message = Message();
-    message.addSegment(Types.Function, Functions.Refresh);
-    BluetoothManager().sendMessage(message);
-
-    // Notify listeners that the data has changed
+  void registerObject(NodeObject obj) {
+    _objects[obj.id.fullAddress] = obj;
     notifyListeners();
   }
 
-  void SaveAll() {
+  NodeObject? getObjectByRef(Reference ref) {
+    return _objects[ref.fullAddress];
+  }
+
+  /// Update a value via global Reference (updates the specific path within that reference)
+  void updateObjectValue(Reference targetRef, Types type, dynamic data) {
+    final obj = getObjectByRef(targetRef);
+    if (obj != null) {
+      // Use the Path portion of the reference to update the object
+      obj.updateValue(targetRef.location, type, data);
+      notifyListeners();
+    }
+  }
+
+  void reloadObjects() {
+    _objects.clear();
+
+    Message message = Message();
+    // Assuming addSegment now maps to path-based entries
+    message.addSegment(Types.Function, Functions.Refresh);
+
+    BluetoothManager().sendMessage(message);
+    notifyListeners();
+  }
+
+  void refreshObject(Reference ref) {
+    Message message = Message();
+    message.addSegment(Types.Function, Functions.ReadObject);
+    message.addSegment(Types.Reference, ref);
+    BluetoothManager().sendMessage(message);
+  }
+
+  void createObject(Reference ref, ObjectTypes type) {
+    Message message = Message();
+    message.addSegment(Types.Function, Functions.CreateObject);
+    message.addSegment(Types.Reference, ref);
+    message.addSegment(Types.ObjectType, type);
+
+    BluetoothManager().sendMessage(message);
+  }
+
+  void onCreateObjectResponse(Message message) {
+    final entries = message.valueEntries;
+    if (entries.length < 3) return;
+
+    // Segment 1: ObjectType, Segment 2: Reference
+    final ObjectTypes objType = entries[1].data as ObjectTypes;
+    final dynamic refData = entries[2].data;
+    final Reference objRef = (refData is Reference) ? refData : Reference.fromList(refData);
+
+    // 1. Register a placeholder object so the UI knows it exists
+    NodeObject newObj = NodeObject(type: objType, id: objRef);
+    registerObject(newObj);
+
+    // 2. Follow up with a refresh to get flags, name, and tree values
+    refreshObject(objRef);
+  }
+
+  void deleteObject(Reference ref) {
+    Message message = Message();
+    message.addSegment(Types.Function, Functions.DeleteObject);
+    message.addSegment(Types.Reference, ref);
+
+    BluetoothManager().sendMessage(message);
+  }
+
+  void onDeleteObjectResponse(Message message) {
+    final entries = message.valueEntries;
+    if (entries.length < 2) return;
+
+    // Segment 1: The Reference of the deleted object
+    final dynamic refData = entries[1].data;
+    final Reference objRef = (refData is Reference) ? refData : Reference.fromList(refData);
+
+    // Remove from local state now that hardware has confirmed destruction
+    _objects.remove(objRef.fullAddress);
+    notifyListeners();
+  }
+
+  void saveAll() {
     Message message = Message();
     message.addSegment(Types.Function, Functions.SaveAll);
     BluetoothManager().sendMessage(message);
   }
 
-  void addObject(Object obj) {
-    _objects.add(obj);
-    notifyListeners();
+  void saveObject(Reference ref) {
+    Message message = Message();
+    message.addSegment(Types.Function, Functions.SaveObject);
+    message.addSegment(Types.Reference, ref);
+
+    BluetoothManager().sendMessage(message);
   }
 
-  Object? getObjectById(int id) {
-    try {
-      return objects.firstWhere((obj) => obj.id == id);
-    } catch (e) {
-      return null;
+  void onSaveObjectResponse(Message message) {
+    final entries = message.valueEntries;
+    if (entries.length < 2) return;
+
+    final dynamic refData = entries[1].data;
+    final Reference objRef = (refData is Reference) ? refData : Reference.fromList(refData);
+
+    // Optional: You could update a "isDirty" flag here if your NodeObject has one
+    print("Object ${objRef.fullAddress} saved successfully to MCU Flash.");
+  }
+
+  /// [0]Func, [1]Ref, [2]Type, [3]Flags, [4]Name, [5+]Values
+  void readObject(Message message) {
+    final entries = message.valueEntries;
+    if (entries.length < 5) return;
+
+    // 1. Identity
+    final dynamic refData = entries[1].data;
+    final Reference objRef = (refData is Reference) ? refData : Reference.fromList(refData);
+    final ObjectTypes objType = entries[2].data as ObjectTypes;
+
+    // 2. Find or Create
+    NodeObject targetObject = getObjectByRef(objRef) ?? NodeObject(type: objType, id: objRef);
+
+    // 3. Metadata
+    targetObject.flags = entries[3].data;
+
+    // Using standard String as per previous fix
+    if (entries[4].data is String) {
+      targetObject.name = entries[4].data;
+    }
+
+    // 4. Process Tree Values (Index 5 onwards)
+    for (int i = 5; i < entries.length; i++) {
+      final entry = entries[i];
+
+      // 1. Extract the raw list from the existing Path object
+      final List<int> rawIndices = List<int>.from(entry.path.indices);
+
+      // 2. Subtract the segment offset (5) from the first index
+      if (rawIndices.isNotEmpty) {
+        rawIndices[0] -= 5;
+      }
+
+      // 3. Create a new Path instance with the corrected indices
+      // and pass it to updateValue
+      targetObject.updateValue(Path(rawIndices), entry.type, entry.data);
+    }
+
+    registerObject(targetObject);
+  }
+
+  /// [0]Func, [1]Ref, [2+]Values
+  void readValue(Message message) {
+    final entries = message.valueEntries;
+    // Segment 1: Reference (contains Net, Group, Dev, AND Path)
+    // Segment 2: Data (The actual value)
+    if (entries.length < 2) return;
+
+    final dynamic refData = entries[1].data;
+    final Reference objRef = (refData is Reference) ? refData : Reference.fromList(refData);
+
+    final targetObject = getObjectByRef(objRef);
+    if (targetObject == null) return;
+
+    if (entries.length >= 3) {
+      // Use the Path stored inside objRef to place the data at the correct tree node
+      targetObject.updateValue(objRef.location, entries[2].type, entries[2].data);
+      notifyListeners();
     }
   }
 
-  void ReadObject(Message message){
-    Object newObject;
-      if(message.getSegmentType(1) == Types.ID
-      && message.getSegmentType(2) == Types.ObjectType){
-        int id = message.getSegmentData(1);
-        ObjectTypes type = message.getSegmentData(2);
-        Object? existingObject = getObjectById(id);
-        if (existingObject != null) {
-          newObject = existingObject;
-        }
-        else{
-          newObject = Object(type: type, id: id);
-        }
-      }
-      else {
-        return;
-      }
-      
-      if(message.getSegmentType(3) == Types.Flags){
-        newObject.flags = message.getSegmentData(3);
-      }
-      if(message.getSegmentType(4) == Types.Text && message.getSegmentData(4) != null){
-        newObject.name = message.getSegmentData(4);
-      }
-      if(message.getSegmentType(5) == Types.IDList){
-        newObject.modules = message.getSegmentData(5);
-      }
-      List<MapEntry<Types, dynamic>> values = [];
-      for (int i = 6; i < message.segmentCount; i++) {
-        values.add(MapEntry(message.getSegmentType(i), message.getSegmentData(i)));
-      }
-      newObject.value = values;
+  /// Sends a new value to the MCU at the specified Reference (Address + Path)
+  void writeValue(Reference ref, dynamic value, {required Types type}) {
+    Message message = Message();
+    message.addSegment(Types.Function, Functions.WriteValue);
+    message.addSegment(Types.Reference, ref);
+    message.addSegment(type, value);
 
-      if (!_objects.contains(newObject)){
-        addObject(newObject);
-      }
-      else{
-        notifyListeners();
-      }
+    BluetoothManager().sendMessage(message);
+    // Reminder: Optimistic update removed per request.
+    // UI will update when MCU echoes back the ReadValue response.
   }
 
-  void WriteValue(Message message){
-    Object? thatObject;
-    int id = 0;
-    if(message.getSegmentType(1) == Types.ID){
-      id = message.getSegmentData(1);
-      // To get the lowest byte of the ID, we can perform a bitwise AND with 0xFF.
-      // 0xFF in hexadecimal is 11111111 in binary.
-      // This operation will keep the lower 8 bits and set all higher bits to 0.
-      int objectId = id & 0xFFFFFF00;
-      thatObject = getObjectById(objectId);
-    }
-    if (thatObject == null){
-      return;
-    }
+  void readFlags(Message message) {
+    final entries = message.valueEntries;
+    if (entries.length < 3) return;
 
-    int lowestByte = id & 0xFF; // [1, 4]
+    final dynamic refData = entries[1].data;
+    final Reference objRef = (refData is Reference) ? refData : Reference.fromList(refData);
 
-    if (lowestByte != 0) {
-      // If the lowest byte is not zero, there's only one value in the message.
-      if (message.segmentCount > 2) {
-        int index = lowestByte - 1;
-        if (index < thatObject.value.length) {
-          // Update the value at the specified index. [3]
-          thatObject.value[index] = MapEntry(message.getSegmentType(2), message.getSegmentData(2));
-        }
-      }
+    final targetObject = getObjectByRef(objRef);
+    if (targetObject != null) {
+      targetObject.flags = entries[2].data;
+      notifyListeners();
+    }
+  }
+
+  void runMessage(Message message) {
+    if (message.valueEntries.isEmpty) return;
+
+    final firstEntry = message.valueEntries.first;
+    if (firstEntry.type != Types.Function) return;
+
+    Functions functionCall;
+    if (firstEntry.data is Functions) {
+      functionCall = firstEntry.data as Functions;
     } else {
-      // Otherwise, read all values from the message.
-      List<MapEntry<Types, dynamic>> values = [];
-      for (int i = 2; i < message.segmentCount; i++) {
-        values.add(MapEntry(message.getSegmentType(i), message.getSegmentData(i)));
-      }
-      thatObject.value = values;
+      functionCall = Functions.values.firstWhere(
+            (f) => f.value == firstEntry.data,
+        orElse: () => Functions.None,
+      );
     }
 
-    notifyListeners();
-  }
-
-
-  void SetFlags(Message message) {
-    if (message.getSegmentType(1) == Types.ID &&
-        message.getSegmentType(2) == Types.Flags) {
-      int id = message.getSegmentData(1);
-      Object? targetObject = getObjectById(id);
-
-      if (targetObject != null) {
-        targetObject.flags = message.getSegmentData(2);
-        notifyListeners(); // Notify listeners if the object's state changed
-      } else {
-        // Handle the case where the object with the given ID is not found
-        print("Object with ID $id not found.");
-      }
-    } else {
-      // Handle incorrect message format
-      print("Invalid message format for SetFlags.");
-    }
-  }
-
-  void runMessage(Message message){
-    if(message.getSegmentType(0) != Types.Function) {
-      return;
-    }
-    switch (message.getSegmentData(0)){
+    switch (functionCall) {
+      case Functions.CreateObject:
+        onCreateObjectResponse(message);
+        break;
+      case Functions.DeleteObject:
+        onDeleteObjectResponse(message);
+        break;
       case Functions.ReadObject:
-        ReadObject(message);
+        readObject(message);
         break;
-      case Functions.WriteValue:
-        WriteValue(message);
+      case Functions.SaveObject:
+        onSaveObjectResponse(message);
         break;
-      case Functions.SetFlags: // Assuming you add SetFlags to your Functions enum
-        SetFlags(message);
+      case Functions.ReadValue:
+        readValue(message);
+        break;
+      case Functions.ReadFlags:
+        readFlags(message);
         break;
       default:
-        print("Not implemented:${message.getSegmentData(0)}");
-        break;
+        print("Function $functionCall not implemented.");
     }
   }
 }

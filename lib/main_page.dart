@@ -8,7 +8,7 @@ import 'bluetooth/discovery_page.dart';
 import 'bluetooth/bluetooth_manager.dart';
 import 'message/queue_page.dart';
 import 'object/object_list_page.dart';
-import 'object/object_graph_page.dart';
+//import 'object/object_graph_page.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -28,44 +28,41 @@ class _MainPage extends State<MainPage> {
     required String title,
     required IconData icon,
     required VoidCallback onPressed,
-    Color? backgroundColor, // Will be overridden by default grey if null
-    Color? iconColor,
-    Color? textColor, // Optional: for specific text color
+    Color? backgroundColor,
+    Color? contentColor, // Combined icon/text color for simplicity
   }) {
-    final defaultBackgroundColor = Colors.grey[300]!;
-    final effectiveBackgroundColor = backgroundColor ?? defaultBackgroundColor;
+    final theme = Theme.of(context);
 
-    final bool isDarkBackground = ThemeData.estimateBrightnessForColor(effectiveBackgroundColor) == Brightness.dark;
-
-    final defaultContentColor = isDarkBackground ? Colors.white : Colors.black;
+    // Default to the secondary slate grey from your theme
+    final effectiveBg = backgroundColor ?? theme.colorScheme.secondary;
+    final effectiveContent = contentColor ?? Colors.white;
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: effectiveBackgroundColor,
-          foregroundColor: textColor ?? defaultContentColor,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: effectiveBg,
+          foregroundColor: effectiveContent,
           minimumSize: const Size(double.infinity, 120),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-          textStyle: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-            color: textColor ?? defaultContentColor,
-          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.0),
           ),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          elevation: 0, // Flat as requested
         ),
         onPressed: onPressed,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Icon(icon, size: 36.0, color: iconColor ?? defaultContentColor),
+            Icon(icon, size: 36.0, color: effectiveContent),
             const SizedBox(height: 8.0),
             Text(
               title,
               textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
               softWrap: true,
             ),
           ],
@@ -76,9 +73,7 @@ class _MainPage extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    const Color bluetoothConnectedColor = Colors.blue;
-    const Color defaultButtonTextColor = Colors.black;
-    const Color bluetoothConnectedTextColor = Colors.white;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +84,6 @@ class _MainPage extends State<MainPage> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            // Left Column
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
@@ -98,10 +92,10 @@ class _MainPage extends State<MainPage> {
                   Consumer<BluetoothManager>(
                     builder: (context, manager, child) {
                       String buttonText;
-                      Color? currentButtonColor;
-                      Color? currentTextColor = defaultButtonTextColor;
-                      Color? currentIconColor = defaultButtonTextColor;
-                      String deviceName = manager.selectedDevice is universal_ble.BleDevice ? manager.selectedDevice.name : manager.selectedDevice.toString();
+                      Color currentButtonColor = theme.colorScheme.secondary;
+                      Color currentContentColor = Colors.white;
+
+                      final deviceName = manager.selectedDevice?.name ?? "Device";
 
                       if (manager.selectedDevice == null) {
                         buttonText = 'Explore\nDevices';
@@ -109,53 +103,52 @@ class _MainPage extends State<MainPage> {
                         buttonText = 'Connecting to\n$deviceName';
                       } else if (manager.isConnected) {
                         buttonText = 'Connected to\n$deviceName';
-                        currentButtonColor = bluetoothConnectedColor;
-                        currentTextColor = bluetoothConnectedTextColor;
-                        currentIconColor = bluetoothConnectedTextColor;
+                        if (manager.connectionType == ConnectionType.uart) {
+                          currentButtonColor = theme.colorScheme.primary;
+                          currentContentColor = Colors.black;
+                        } else {
+                          currentButtonColor = Colors.blue.shade700;
+                          currentContentColor = Colors.white;
+                        }
                       } else {
-                        buttonText = 'Connection Failed\n$deviceName';
+                        buttonText = 'Connection Failed';
                       }
 
                       return _buildMenuButton(
                         title: buttonText,
                         icon: Icons.bluetooth,
                         backgroundColor: currentButtonColor,
-                        textColor: currentTextColor,
-                        iconColor: currentIconColor,
+                        contentColor: currentContentColor,
                         onPressed: () async {
-                          if (await Permission.bluetoothScan.isDenied || await Permission.bluetoothConnect.isDenied) {
+                          // 1. Request Permissions
+                          if (await Permission.bluetoothScan.isDenied ||
+                              await Permission.bluetoothConnect.isDenied) {
                             await [Permission.bluetoothScan, Permission.bluetoothConnect].request();
                           }
 
+                          // 2. Check if Bluetooth is actually ON
                           if (manager.bluetoothState != universal_ble.AvailabilityState.poweredOn) {
                             try {
                               await universal_ble.UniversalBle.enableBluetooth();
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Bluetooth could not be enabled.')),
-                              );
-                              return;
-                            }
-                            await Future.delayed(const Duration(milliseconds: 500));
-                            if (manager.bluetoothState != universal_ble.AvailabilityState.poweredOn) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please enable Bluetooth.')),
-                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Bluetooth could not be enabled.')),
+                                );
+                              }
                               return;
                             }
                           }
 
+                          // 3. Handle Navigation or Disconnection
                           if (manager.isConnected) {
                             manager.disconnect();
                           } else {
-                            final selectedDevice =
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) {
-                                  return const DiscoveryPage();
-                                },
-                              ),
+                            // Open Discovery Page and wait for result
+                            final selectedDevice = await Navigator.of(context).push(
+                              MaterialPageRoute(builder: (context) => const DiscoveryPage()),
                             );
+
                             if (selectedDevice != null) {
                               manager.setSelectedDevice(selectedDevice);
                             }
@@ -165,15 +158,11 @@ class _MainPage extends State<MainPage> {
                     },
                   ),
                   _buildMenuButton(
-                    title: 'Message\nQueue',
+                    title: 'Message\nInspector',
                     icon: Icons.forum_outlined,
-                    textColor: defaultButtonTextColor,
-                    iconColor: defaultButtonTextColor,
                     onPressed: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const QueuePage(),
-                        ),
+                        MaterialPageRoute(builder: (context) => const QueuePage()),
                       );
                     },
                   ),
@@ -181,7 +170,6 @@ class _MainPage extends State<MainPage> {
               ),
             ),
             const SizedBox(width: 8),
-            // Right Column
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
@@ -190,29 +178,21 @@ class _MainPage extends State<MainPage> {
                   _buildMenuButton(
                     title: 'Object\nList',
                     icon: Icons.view_list_outlined,
-                    textColor: defaultButtonTextColor,
-                    iconColor: defaultButtonTextColor,
                     onPressed: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const ObjectListPage(),
-                        ),
+                        MaterialPageRoute(builder: (context) => const ObjectListPage()),
                       );
                     },
                   ),
-                  _buildMenuButton(
+                  /*_buildMenuButton(
                     title: 'Object\nGraph',
                     icon: Icons.hub_outlined,
-                    textColor: defaultButtonTextColor,
-                    iconColor: defaultButtonTextColor,
                     onPressed: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const ObjectGraphPage(),
-                        ),
+                        MaterialPageRoute(builder: (context) => const ObjectGraphPage()),
                       );
                     },
-                  ),
+                  ),*/
                 ],
               ),
             ),

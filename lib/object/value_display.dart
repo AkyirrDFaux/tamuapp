@@ -1,0 +1,151 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+
+import 'object.dart';
+import 'object_manager.dart';
+import '../types.dart';
+import '../values.dart';
+
+class ValueDisplay extends StatelessWidget {
+  final dynamic value;
+  final Types type;
+
+  const ValueDisplay({
+    super.key,
+    required this.type,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    TextStyle dataStyle = TextStyle(
+      fontSize: 15,
+      color: value == null ? Colors.white24 : Colors.white,
+      fontWeight: FontWeight.w500,
+    );
+
+    if (value == null) {
+      return Text("None",
+          style: dataStyle.copyWith(color: Colors.white24, fontStyle: FontStyle.italic));
+    }
+
+    // 1. Handle Enums / Named Types
+    if (isInValueEnum(type) && value is int) {
+      String name = getValueEnum(type, value) ?? "Unknown ($value)";
+      return _buildEnumBadge(name, theme);
+    }
+
+    // 2. Special Widget Builders (Colour)
+    if (type == Types.Colour && value is Colour) {
+      return _buildColourRow(value, dataStyle);
+    }
+
+    // 3. Standard Text Output
+    return Text(
+      _getFormattedString(),
+      style: dataStyle,
+    );
+  }
+
+  String _getFormattedString() {
+    switch (type) {
+      case Types.Byte:
+        if (value is int) {
+          final hex = value.toRadixString(16).padLeft(2, '0').toUpperCase();
+          return "$value (0x$hex)";
+        }
+        return value.toString();
+
+      case Types.Bool:
+        return (value == true || value == 1) ? "True" : "False";
+
+      case Types.Number:
+        if (value is num) return value.toStringAsFixed(2);
+        return value.toString();
+
+      case Types.Vector2D:
+        if (value is Vector2D) return _formatVec2(value);
+        break;
+
+      case Types.Vector3D:
+        if (value is Vector3D) return _formatVec3(value);
+        break;
+
+      case Types.Coord2D:
+        if (value is Coord2D) {
+          final angle = atan2(value.Rotation.Y, value.Rotation.X) * 180 / pi;
+          return "${_formatVec2(value.Position)}, Angle: ${angle.toStringAsFixed(1)}°";
+        }
+        break;
+
+      case Types.Coord3D:
+        if (value is Coord3D) {
+          // For 3D, we usually just display the two vectors clearly
+          return "Pos: [${_formatVec3(value.Position)}], Rot: [${_formatVec3(value.Rotation)}]";
+        }
+        break;
+
+      case Types.Reference:
+        return value.toString();
+
+      case Types.Text:
+        return value.toString();
+
+      case Types.Flags:
+        if (value is int) return "Bits: ${value.toRadixString(2).padLeft(8, '0')}";
+        break;
+
+      default:
+        return value.toString();
+    }
+    return value.toString();
+  }
+
+  // --- Formatting Helpers ---
+
+  String _formatVec2(Vector2D v) =>
+      "X: ${v.X.toStringAsFixed(1)}, Y: ${v.Y.toStringAsFixed(1)}";
+
+  String _formatVec3(Vector3D v) =>
+      "X: ${v.X.toStringAsFixed(1)}, Y: ${v.Y.toStringAsFixed(1)}, Z: ${v.Z.toStringAsFixed(1)}";
+
+  Widget _buildEnumBadge(String label, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: theme.colorScheme.primary,
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColourRow(Colour c, TextStyle baseStyle) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: Color.fromARGB(c.A, c.R, c.G, c.B),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white30),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text("R:${c.R} G:${c.G} B:${c.B} A:${c.A}", style: baseStyle),
+      ],
+    );
+  }
+}

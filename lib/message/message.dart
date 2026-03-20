@@ -8,441 +8,398 @@ import '../object/object.dart';
 import '../types.dart';
 
 class Message {
-  List<Uint8List> segments; // Changed to a mutable List
+  List<ValueEntry> valueEntries;
 
-  Message({List<Uint8List>? segments}) : segments = segments ?? []; // Initialize as a mutable list
+  Message({List<ValueEntry>? valueEntries}) : valueEntries = valueEntries ?? [];
 
-  /// Creates a SegmentedMessage from a single Uint8List, splitting it into segments of the specified size.
+  // factory CAN access static methods
   factory Message.fromBytes(Uint8List data) {
-    final segments = <Uint8List>[];
-    if (data.length < 4) {
-      // Not enough data to read the message size
-      return Message(segments: segments);
-    }
+    if (data.length < 4) return Message();
+
     final byteData = ByteData.sublistView(data);
-    final messageSize = byteData.getUint32(0, Endian.little);
-    if (data.length < messageSize + 4) {
-      // Not enough data to read the whole message
-      return Message(segments: segments);
-    }
+    final totalSize = byteData.getUint16(0, Endian.little);
+    final headerCount = byteData.getUint16(2, Endian.little);
 
-    final messageData = data.sublist(4, messageSize + 4);
-    int offset = 0;
-    while (offset < messageData.length) {
-      final segmentType = Types.fromValue(messageData[offset]);
-      int segmentSize = Types.getSize(segmentType);
+    // Safety: Ensure we don't overread if the buffer is truncated
+    if (data.length < totalSize) return Message();
 
-      if (segmentSize == -1) {
-        // Handle variable-length segments
-        switch (segmentType) {
-          case Types.Text:
-          // Ensure there's enough data for the length byte
-            if (offset + 1 < messageData.length) {
-              segmentSize = messageData[offset + 1] + 2; // type + length + data
-            } else {
-              segmentSize = 1; // Malformed, treat as single byte
-            }
-            break; // <-- FIX: Added break
-          case Types.IDList:
-          // Ensure there's enough data for the length byte
-            if (offset + 1 < messageData.length) {
-              segmentSize = messageData[offset + 1] * 4 + 2; // type + length + data
-            } else {
-              segmentSize = 1; // Malformed, treat as single byte
-            }
-            break; // <-- FIX: Added break
-          default:
-          // Should not happen if getSize is defined for all var-length types
-            segmentSize = 1;
-            break;
-        }
+    int hPtr = 4;
+    int dPtr = 4 + (headerCount * 4);
+
+    final entries = <ValueEntry>[];
+    List<int> currentPath = [];
+    Map<int, int> depthCounters = {};
+
+    for (int i = 0; i < headerCount; i++) {
+      final type = Types.fromValue(data[hPtr]);
+      final int depth = data[hPtr + 1];
+      final int length = byteData.getUint16(hPtr + 2, Endian.little);
+
+      // --- PATH RECONSTRUCTION ---
+      while (currentPath.length > depth) {
+        currentPath.removeLast();
+      }
+
+      int currentIndex = depthCounters[depth] ?? 0;
+
+      if (currentPath.length <= depth) {
+        currentPath.add(currentIndex);
       } else {
-        // Fixed-length segments (including data-less ones like Undefined)
-        segmentSize += 1; // Add 1 for the type byte
+        currentPath[depth] = currentIndex;
       }
 
-      // Final safety check to prevent overflow
-      if (offset + segmentSize > messageData.length) {
-        // The declared size is larger than the available data, indicates a corrupt message.
-        // Add the rest of the data as the last, possibly corrupt, segment.
-        segmentSize = messageData.length - offset;
-      }
+      depthCounters[depth] = currentIndex + 1;
+      depthCounters.removeWhere((key, value) => key > depth);
 
-      segments.add(messageData.sublist(offset, offset + segmentSize));
-      offset += segmentSize;
+      // --- DATA EXTRACTION ---
+      if (dPtr + length <= data.length) {
+        final rawData = data.sublist(dPtr, dPtr + length);
+
+        entries.add(ValueEntry(
+          type: type,
+          path: Path(List<int>.from(currentPath)), // Snapshot of current path
+          data: deserializeRaw(type, rawData),
+        ));
+
+        dPtr += length;
+      }
+      hPtr += 4;
     }
-    return Message(segments: segments);
+
+    // Pass the populated list to the constructor
+    return Message(valueEntries: entries);
   }
 
+  /// Helper to add a segment by creating a ValueEntry
+  void addSegment(Types type, dynamic data, {List<int>? pathIndices}) {
+    valueEntries.add(ValueEntry(
+      type: type,
+      path: Path(pathIndices ?? []),
+      data: data,
+    ));
+  }
+
+  /// The Flutter equivalent of C++ CreateMessage()
+  Uint8List pack() {
+    int headerCount = valueEntries.length;
+    int headerAreaSize = headerCount * 4; // Transfer Header: Type(1), Depth(1), Length(2)
+    int prefixSize = 4;
+
+    // 1. Pre-serialize to calculate total size
+    List<Uint8List> payloads = [];
+    int totalPayloadSize = 0;
+
+    for (var entry in valueEntries) {
+      // Ensure _serializeData handles your specific Types (int, float, Text, etc.)
+      Uint8List d = _serializeData(entry.type, entry.data);
+      payloads.add(d);
+      totalPayloadSize += d.length;
+    }
+
+    Uint8List buffer = Uint8List(prefixSize + headerAreaSize + totalPayloadSize);
+    ByteData view = ByteData.view(buffer.buffer);
+
+    // 2. Write Prefix (Total Length and Segment Count)
+    view.setUint16(0, buffer.length, Endian.little);
+    view.setUint16(2, headerCount, Endian.little);
+
+    int hPtr = prefixSize;
+    int dPtr = prefixSize + headerAreaSize;
+
+    // 3. Pack Headers and Data
+    for (int i = 0; i < headerCount; i++) {
+      final entry = valueEntries[i];
+      final data = payloads[i];
+
+      // Write Type byte
+      buffer[hPtr] = entry.type.value;
+
+      // Write Depth byte (The length of the local path indices)
+      // For a root-level segment, path.length is 0.
+      buffer[hPtr + 1] = entry.path.indices.length;
+
+      // Write Data Length (2 bytes)
+      view.setUint16(hPtr + 2, data.length, Endian.little);
+
+      hPtr += 4;
+
+      // Write Payload Data
+      if (data.isNotEmpty) {
+        buffer.setRange(dPtr, dPtr + data.length, data);
+        dPtr += data.length;
+      }
+    }
+
+    return buffer;
+  }
+
+  Uint8List _serializeData(Types type, dynamic data) {
+    if (data == null) return Uint8List(0);
+
+    // Helper to pack 16.16 Fixed Point into 4 bytes
+    void packFixed(ByteData view, int offset, dynamic val) {
+      int fixedVal = ((val as num).toDouble() * 65536.0).round();
+      view.setInt32(offset, fixedVal, Endian.little);
+    }
+
+    // Helper to pack standard 32-bit Integer
+    void packInt32(ByteData view, int offset, int val) {
+      view.setInt32(offset, val, Endian.little);
+    }
+
+    switch (type) {
+      case Types.Bool:
+        return Uint8List.fromList([(data == true || data == 1) ? 1 : 0]);
+
+      case Types.Function:
+        int val = (data is Functions) ? data.value : (data as int);
+        return Uint8List.fromList([val & 0xFF]);
+
+      case Types.ObjectType:
+        int val = (data is ObjectTypes) ? data.value : (data as int);
+        return Uint8List.fromList([val & 0xFF]);
+
+      case Types.Flags:
+        final b = Uint8List(4);
+        int val = (data is FlagClass) ? data.value : (data as int);
+        packInt32(ByteData.view(b.buffer), 0, val);
+        return b;
+
+      case Types.Integer:
+      case Types.PortType:
+        final b = Uint8List(4);
+        packInt32(ByteData.view(b.buffer), 0, data as int);
+        return b;
+
+      case Types.Number:
+        final b = Uint8List(4);
+        packFixed(ByteData.view(b.buffer), 0, data);
+        return b;
+
+      case Types.Vector2D:
+        final b = Uint8List(8);
+        final view = ByteData.view(b.buffer);
+        packFixed(view, 0, data.X);
+        packFixed(view, 4, data.Y);
+        return b;
+
+      case Types.Vector3D:
+        final b = Uint8List(12);
+        final view = ByteData.view(b.buffer);
+        packFixed(view, 0, data.X);
+        packFixed(view, 4, data.Y);
+        packFixed(view, 8, data.Z);
+        return b;
+
+      case Types.Coord2D:
+        final b = Uint8List(16);
+        final view = ByteData.view(b.buffer);
+        // Position (X, Y) + Rotation Vector (X, Y)
+        packFixed(view, 0, data.Position.X);
+        packFixed(view, 4, data.Position.Y);
+        packFixed(view, 8, data.Rotation.X);
+        packFixed(view, 12, data.Rotation.Y);
+        return b;
+
+      case Types.Coord3D:
+        final b = Uint8List(24);
+        final view = ByteData.view(b.buffer);
+        packFixed(view, 0, data.Position.X);
+        packFixed(view, 4, data.Position.Y);
+        packFixed(view, 8, data.Position.Z);
+        packFixed(view, 12, data.Rotation.X);
+        packFixed(view, 16, data.Rotation.Y);
+        packFixed(view, 20, data.Rotation.Z);
+        return b;
+
+      case Types.Text:
+        String str = data is String ? data : data.toString();
+        return Uint8List.fromList(utf8.encode(str));
+
+      case Types.Reference:
+        if (data is Reference) return Uint8List.fromList(data.toBytes());
+        if (data is List<int>) return Uint8List.fromList(data);
+        return Uint8List(0);
+
+      case Types.Colour:
+      // Packs as [R, G, B, A]
+        return Uint8List.fromList([data.R, data.G, data.B, data.A]);
+
+      case Types.Pin:
+        final b = Uint8List(2);
+        ByteData.view(b.buffer).setUint16(0, data as int, Endian.little);
+        return b;
+
+    // 1-Byte Hardware/Status/Enum types
+      case Types.Board:
+      case Types.Sensor:
+      case Types.PortDriver:
+      case Types.AccGyr:
+      case Types.Geometry2D:
+      case Types.GeometryOperation:
+      case Types.Operation:
+      case Types.Program:
+      case Types.LocalFunction:
+      case Types.Display:
+      case Types.Byte:
+      case Types.Type:
+      case Types.Status:
+      case Types.Input:
+        int val = (data is Enum) ? (data as dynamic).index : (data as int);
+        return Uint8List.fromList([val & 0xFF]);
+
+      /*case Types.Message:
+        if (data is Message) return data.toBytes();
+        return data as Uint8List;*/
+
+      default:
+        if (data is Uint8List) return data;
+        return Uint8List(0);
+    }
+  }
+
+  static dynamic deserializeRaw(Types type, Uint8List raw) {
+    if (raw.isEmpty) return null;
+
+    final view = ByteData.view(raw.buffer, raw.offsetInBytes, raw.length);
+
+    // Helper to read 16.16 Fixed Point
+    double toFixed(int offset) {
+      if (offset + 4 > raw.length) return 0.0;
+      return view.getInt32(offset, Endian.little) / 65536.0;
+    }
+
+    // Helper to read standard 32-bit signed integers
+    int readInt32(int offset) {
+      if (offset + 4 > raw.length) return 0;
+      return view.getInt32(offset, Endian.little);
+    }
+
+    // Helper to read 8-bit unsigned integers
+    int readUint8(int offset) {
+      if (offset >= raw.length) return 0;
+      return view.getUint8(offset);
+    }
+
+    switch (type) {
+      case Types.Bool:
+        return readUint8(0) != 0;
+
+      case Types.Function:
+        return Functions.fromValue(readUint8(0));
+
+      case Types.ObjectType:
+        return ObjectTypes.fromValue(readUint8(0));
+
+      case Types.Flags:
+      // Flags are often bitmasks, usually 32-bit in this protocol
+        return FlagClass(readInt32(0));
+
+      case Types.Integer:
+        return readInt32(0);
+
+      case Types.Number:
+        return toFixed(0);
+
+      case Types.Vector2D:
+        if (raw.length < 8) return Vector2D(0, 0);
+        return Vector2D(toFixed(0), toFixed(4));
+
+      case Types.Vector3D:
+        if (raw.length < 12) return Vector3D(0, 0, 0);
+        return Vector3D(toFixed(0), toFixed(4), toFixed(8));
+
+      case Types.Coord2D:
+        if (raw.length < 16) return Coord2D(Vector2D(0, 0), Vector2D(1, 0));
+        return Coord2D(
+            Vector2D(toFixed(0), toFixed(4)),
+            Vector2D(toFixed(8), toFixed(12))
+        );
+
+      case Types.Coord3D:
+        if (raw.length < 24) return Coord3D(Vector3D(0,0,0), Vector3D(0,0,0));
+        return Coord3D(
+            Vector3D(toFixed(0), toFixed(4), toFixed(8)),
+            Vector3D(toFixed(12), toFixed(16), toFixed(20))
+        );
+
+      case Types.Text:
+        try {
+          int len = raw.length;
+          while (len > 0 && raw[len - 1] == 0) len--;
+          return utf8.decode(raw.sublist(0, len));
+        } catch (e) {
+          return "Encoding Error";
+        }
+
+      case Types.Reference:
+        return Reference.fromList(raw.toList());
+
+      case Types.Colour:
+        if (raw.length < 4) return Colour(0, 0, 0, 255);
+        return Colour(raw[0], raw[1], raw[2], raw[3]);
+
+      case Types.PortType:
+        return readInt32(0);
+
+      case Types.Pin:
+        if (raw.length < 2) return 0;
+        return view.getUint16(0, Endian.little);
+
+    // Grouping all 1-byte hardware/status/enum types
+      case Types.Board:
+      case Types.Sensor:
+      case Types.PortDriver:
+      case Types.AccGyr:
+      case Types.Geometry2D:
+      case Types.GeometryOperation:
+      case Types.Operation:
+      case Types.Program:
+      case Types.LocalFunction:
+      case Types.Display:
+      case Types.Byte:
+      case Types.Type:
+      case Types.Status:
+      case Types.Input:
+        return readUint8(0);
+
+      /*case Types.Message:
+        return Message.fromBytes(raw);*/
+
+      case Types.Undefined:
+      default:
+        return raw;
+    }
+  }
   @override
   String toString() {
-    if (segments.isEmpty) {
-      return "Message (empty)";
-    }
-    // Use map to create a list of strings, each representing a segment,
-    // then join them with a newline character.
-    String segmentStrings = segments.map((segment) {
-      // It's safer to get the index directly rather than relying on segments.indexOf(segment)
-      // if segments could potentially contain duplicate Uint8List instances (though unlikely here).
-      // However, for simplicity and assuming unique segments in the list order:
-      int index = segments.indexOf(segment); // Be cautious if segments can have identical Uint8List instances
-      if (index == -1) return "Error: Segment not found in message"; // Should not happen with current structure
+    if (valueEntries.isEmpty) return "Empty Message";
 
-      Types type = getSegmentType(index);
-      dynamic data;
-      try {
-        data = getSegmentData(index);
-      } catch (e) {
-        data = "Error reading data: $e";
+    return valueEntries.map((entry) {
+      String typeName = entry.type.toString().split('.').last;
+      String pathStr = entry.path.pathString;
+      dynamic data = entry.data;
+
+      // 1. Format the data representation based on its actual type
+      String dataStr;
+      if (data is Functions) {
+        dataStr = data.toString().split('.').last;
+      } else if (data is ObjectTypes) {
+        dataStr = data.toString().split('.').last;
+      } else if (data is Reference) {
+        // Use the fullAddress we built earlier (Net.Group.Device.Path)
+        dataStr = "Ref(${data.fullAddress})";
+      } else if (data.runtimeType.toString().contains('Text')) {
+        // Handles your custom Text class safely
+        dataStr = '"${data.Data}"';
+      } else if (data is List<int>) {
+        dataStr = "[${data.join(', ')}]";
+      } else {
+        dataStr = data.toString();
       }
 
-      if (isInValueEnum(type)){
-        return "  ${type.name}: ${getValueEnum(type, data)}"; // Added indentation for better readability
-      }
-      return "  ${type.name}: $data"; // Added indentation for better readability
-    }).join("\n"); // Join with newline character
-
-    return "\n$segmentStrings"; // Add a header for the message itself
-  }
-
-  /// Returns the number of segments in the message.
-  int get segmentCount => segments.length;
-
-  /// Adds a new segment to the end of the message.
-  void addSegment(Types type, [dynamic data]) {
-    // Determine if the type is one that should not have data.
-    bool isDataLessType = (Types.getSize(type) == 0);
-
-    if (data != null && !isDataLessType) {
-      // Data is provided and the type supports data.
-      // Create a placeholder segment; it will be replaced by setSegmentData.
-      segments.add(Uint8List(0));
-      setSegmentData(segments.length - 1, data, type: type);
-    } else {
-      // No data is provided, or the type is inherently data-less (e.g., EOL, Undefined).
-      // Create a simple segment with only the type byte.
-      final segment = Uint8List(1);
-      segment[0] = type.value;
-      segments.add(segment);
-    }
-  }
-
-  /// Returns the type of the segment based on the first byte.
-  Types getSegmentType(int index) {
-    if (index < 0 || index >= segments.length) {
-      return Types.Undefined;
-    }
-    final segment = segments[index];
-    if (segment.isEmpty) {
-      return Types.Undefined;
-    }
-    return Types.fromValue(segment[0]);
-  }
-
-  /// Returns the data from the segment (excluding the type byte) as a dynamic value.
-  dynamic getSegmentData(int index) {
-    if (index < 0 || index >= segments.length) {
-      throw RangeError.index(index, segments);
-    }
-    final segment = segments[index];
-    if (segment.length <= 1) { // Changed to <= 1 to handle data-less segments
-      return null;
-    }
-    final type = getSegmentType(index);
-    switch (type) {
-      case Types.Text:
-        final textLength = segment[1];
-        if (textLength == 0) {
-          return null;
-        }
-        final data = segment.sublist(2, textLength + 2);
-        return utf8.decode(data); // Decode as UTF-8 string
-      case Types.Flags:
-        final data = segment.sublist(1);
-        return FlagClass(ByteData.sublistView(data).getUint8(0));
-      case Types.Number:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return byteData.getFloat32(0,Endian.little); // Interpret as 32-bit float
-      case Types.Integer:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return byteData.getInt32(0, Endian.little); // Interpret as 32-bit integer
-      case Types.ID:
-      case Types.Time:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return byteData.getUint32(0, Endian.little); // Interpret as unsigned 32-bit integer
-      case Types.Vector2D:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return Vector2D(byteData.getFloat32(0, Endian.little),
-            byteData.getFloat32(4, Endian.little));
-      case Types.Vector3D:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return Vector3D(byteData.getFloat32(0, Endian.little),
-            byteData.getFloat32(4, Endian.little),byteData.getFloat32(8, Endian.little));
-      case Types.Coord2D:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return Coord2D(Vector2D(byteData.getFloat32(0, Endian.little),
-            byteData.getFloat32(4, Endian.little)),
-            Vector2D(byteData.getFloat32(8, Endian.little),
-                byteData.getFloat32(12, Endian.little)));
-      case Types.Coord3D:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return Coord3D(
-          Vector3D(byteData.getFloat32(0, Endian.little), byteData.getFloat32(4, Endian.little), byteData.getFloat32(8, Endian.little)),
-          Vector3D(byteData.getFloat32(12, Endian.little), byteData.getFloat32(16, Endian.little), byteData.getFloat32(20, Endian.little)),
-        );
-      case Types.Colour:
-        final data = segment.sublist(1);
-        final byteData = ByteData.sublistView(data);
-        return Colour(byteData.getUint8(0), byteData.getUint8(1),
-            byteData.getUint8(2), byteData.getUint8(3));
-      case Types.IDList:
-        final data = segment.sublist(2); // Skip type byte and length byte
-        final byteData = ByteData.sublistView(data);
-        final idList = <MapEntry<int, int>>[];
-        int offset = 0;
-        int index = 0;
-        while (offset < data.length) {
-          final value = byteData.getUint32(offset, Endian.little);
-          idList.add(MapEntry(index, value));
-          index += 1;
-          offset += 4;
-        }
-        return idList;
-      default:
-        if (Types.getSize(type) == 1) {
-          final data = segment.sublist(1);
-          final byteData = ByteData.sublistView(data);
-          switch (type){
-            case Types.ObjectType:
-              return ObjectTypes.fromValue(byteData.getUint8(0));
-            case Types.Function:
-              return Functions.fromValue(byteData.getUint8(0));
-            case Types.Bool:
-              return byteData.getUint8(0) == 1;
-            default:
-              return byteData.getUint8(0);
-          }
-        }
-        if (Types.getSize(type) == 4) {
-          final data = segment.sublist(1);
-          final byteData = ByteData.sublistView(data);
-          return byteData.getUint32(0, Endian.little);
-        }
-        else {
-          return segment.sublist(1);
-        }
-    }
-  }
-
-  /// Sets the data of an existing segment.
-  void setSegmentData(int index, dynamic data, {Types? type}) {
-    if (index < 0 || index >= segments.length) {
-      throw RangeError.index(index, segments);
-    }
-    final segmentType = type ?? getSegmentType(index);
-
-    switch (segmentType) {
-      case Types.Text:
-        if (data is String) {
-          final encoded = utf8.encode(data);
-          // Create a new segment with the correct size
-          final newSegment = Uint8List(encoded.length + 2);
-          newSegment[0] = segmentType.value;
-          newSegment[1] = encoded.length;
-          newSegment.setRange(2, encoded.length + 2, encoded);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a String for Types.text");
-        }
-        break;
-      case Types.Flags:
-        if (data is FlagClass) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setUint8(1, data.value);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a FlagClass for Types.Flags");
-        }
-        break;
-      case Types.Number:
-        if (data is double) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setFloat32(1, data,Endian.little);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a double for Types.float32");
-        }
-        break;
-      case Types.Integer:
-        if (data is int) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setInt32(1, data,Endian.little);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be an int for Types.int32");
-        }
-        break;
-      case Types.ID:
-      case Types.Time:
-        if (data is int) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setUint32(1, data,Endian.little);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be an int for Time or ID");
-        }
-        break;
-      case Types.Byte:
-        if (data is int) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          newSegment[1] = data;
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be an int for Types.byte");
-        }
-        break;
-      case Types.Bool:
-        if (data is bool) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          newSegment[1] = data ? 1 : 0;
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a bool for Types.Bool");
-        }
-        break;
-      case Types.Vector2D:
-        if (data is Vector2D) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setFloat32(1, data.X,Endian.little);
-          ByteData.sublistView(newSegment).setFloat32(5, data.Y,Endian.little);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a Vector2D for Types.vector2D");
-        }
-        break;
-      case Types.Vector3D:
-        if (data is Vector3D) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setFloat32(1, data.X,Endian.little);
-          ByteData.sublistView(newSegment).setFloat32(5, data.Y,Endian.little);
-          ByteData.sublistView(newSegment).setFloat32(9, data.Z,Endian.little);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a Vector3D for Types.vector2D");
-        }
-        break;
-      case Types.Coord2D:
-        if (data is Coord2D){
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setFloat32(1, data.Position.X,Endian.little);
-          ByteData.sublistView(newSegment).setFloat32(5, data.Position.Y,Endian.little);
-          ByteData.sublistView(newSegment).setFloat32(9, data.Rotation.X,Endian.little);
-          ByteData.sublistView(newSegment).setFloat32(13, data.Rotation.Y,Endian.little);
-          segments[index] = newSegment;
-        }
-        else{
-          throw ArgumentError("Data must be a Coord2D for Types.coord2D");
-        }
-        break;
-      case Types.Coord3D:
-        if (data is Coord3D) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          final byteData = ByteData.sublistView(newSegment, 1);
-          byteData.setFloat32(0, data.Position.X, Endian.little);
-          byteData.setFloat32(4, data.Position.Y, Endian.little);
-          byteData.setFloat32(8, data.Position.Z, Endian.little);
-          byteData.setFloat32(12, data.Rotation.X, Endian.little);
-          byteData.setFloat32(16, data.Rotation.Y, Endian.little);
-          byteData.setFloat32(20, data.Rotation.Z, Endian.little);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a Coord3D for Types.coord3D");
-        }
-        break;
-      case Types.Colour:
-        if (data is Colour) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setUint8(1, data.R);
-          ByteData.sublistView(newSegment).setUint8(2, data.G);
-          ByteData.sublistView(newSegment).setUint8(3, data.B);
-          ByteData.sublistView(newSegment).setUint8(4, data.A);
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a Uint8List of length 4 for Types.color");
-        }
-        break;
-      case Types.Function:
-        if (data is Functions) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          newSegment[1] = data.value;
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be a Function");
-        }
-        break;
-      case Types.ObjectType:
-        if (data is ObjectTypes) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          newSegment[1] = data.value;
-          segments[index] = newSegment;
-        } else {
-          throw ArgumentError("Data must be an ObjectType");
-        }
-        break;
-      case Types.IDList:
-        if (data is List<MapEntry<int, int>>) {
-          final newSegment = Uint8List(data.length * 4+ 2);
-          newSegment[0] = segmentType.value;
-          newSegment[1] = data.length;
-          for (int i = 0; i < data.length; i++) {
-            ByteData.sublistView(newSegment).setUint32(i * 4 + 2, data[i].value,Endian.little);
-          }
-          segments[index] = newSegment;
-        }
-        else{
-          throw ArgumentError("Data must be a List<MapEntry<int, int>> for Types.IDList");
-        }
-        break;
-      default:
-        if (data is int && Types.getSize(segmentType) == 1) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setUint8(1, data);
-          segments[index] = newSegment;
-        }
-        else if (data is int && Types.getSize(segmentType) == 4) {
-          final newSegment = Uint8List(Types.getSize(segmentType) + 1);
-          newSegment[0] = segmentType.value;
-          ByteData.sublistView(newSegment).setUint32(1, data, Endian.little);
-          segments[index] = newSegment;
-        }
-        else {
-          throw ArgumentError("Unsupported segment type for setting data.");
-        }
-    }
-  }
-
-  void removeSegment(int index) {
-    segments.removeAt(index);
+      // 2. Include the Path in the output so you can see WHERE the data belongs
+      return "{$pathStr} $typeName: $dataStr";
+    }).join(" | ");
   }
 }

@@ -1,33 +1,117 @@
+import 'dart:collection';
+
 import '../flags.dart';
 import '../types.dart';
 
-class Object {
-  final ObjectTypes type;
-  int id;
-  String name = "Unnamed";
-  FlagClass flags = FlagClass();
-  List<MapEntry<int, int>> modules = <MapEntry<int, int>>[];
-  List<MapEntry<Types, dynamic>> value = [];
+class Path {
+  final List<int> indices;
+  final String pathString;
 
-  Object({
-    required this.type,
-    required this.id,
-  });
+  Path([List<int>? input])
+      : indices = List<int>.unmodifiable(input ?? []),
+        pathString = (input ?? []).join('.');
 
-  String get formattedId {
-    final x = id >> 8; // Shift to the right by 8 to get the higher bits
-    final y = id & 0xFF; // Use a bitwise AND with 0xFF to get the lower 8 bits
-    return '$x.$y';
+  int get length => indices.length;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          (other is Path && pathString == other.pathString);
+
+  @override
+  int get hashCode => pathString.hashCode;
+
+  @override
+  String toString() => pathString.isEmpty ? "Root" : pathString;
+}
+
+class Reference {
+  final int net;
+  final int group;
+  final int device;
+  final Path location;
+
+  // Caching the full string for fast Map lookups and comparison
+  final String fullAddress;
+
+  Reference(this.net, this.group, this.device, [Path? path])
+      : location = path ?? Path(),
+        fullAddress = "$net.$group.$device${(path != null && path.indices.isNotEmpty) ? '.${path.pathString}' : ''}";
+
+  /// Constructor to build from a raw list of bytes [Net, Group, Device, ...Path...]
+  factory Reference.fromList(List<int> values) {
+    if (values.length < 3) return Reference(0, 0, 0);
+
+    final net = values[0];
+    final group = values[1];
+    final device = values[2];
+
+    // Anything after index 2 is the local Path
+    final pathSegments = values.sublist(3);
+    return Reference(net, group, device, Path(pathSegments));
   }
 
-  List<Object> references(List<Object> allObjects) {
-    List<Object> result = [];
-    for (Object obj in allObjects) {
-      if (obj.modules.any((module) => module.key == id)) {
-        result.add(obj);
-      }
+  /// Helper to get the raw byte representation for sending to MCU
+  List<int> toBytes() {
+    return [net, group, device, ...location.indices];
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          (other is Reference && fullAddress == other.fullAddress);
+
+  @override
+  int get hashCode => fullAddress.hashCode;
+
+  @override
+  String toString() => fullAddress;
+}
+
+// Extension to help with list comparison (requires no extra packages)
+extension IterableExtension<T> on Iterable<T> {
+  bool all(bool Function(T element) test) {
+    for (T element in this) {
+      if (!test(element)) return false;
     }
-    return result;
+    return true;
+  }
+}
+
+class ValueEntry {
+  final Types type;
+  final Path path; // Switched from Reference to Path
+  dynamic data;
+
+  ValueEntry({
+    required this.type,
+    required this.path,
+    required this.data,
+  });
+}
+
+class NodeObject {
+  final ObjectTypes type;
+  final Reference id; // Global Address (Net, Group, Device)
+  String name;
+  FlagClass flags = FlagClass();
+
+  // The key is the Path string (e.g., "0", "1.2")
+  final SplayTreeMap<String, ValueEntry> values = SplayTreeMap<String, ValueEntry>();
+
+  NodeObject({required this.type, required this.id, this.name = "Unnamed"});
+
+  List<ValueEntry> get sortedValues => values.values.toList();
+
+  /// Updates a value using a local Path
+  void updateValue(Path path, Types type, dynamic data) {
+    values[path.pathString] = ValueEntry(
+      type: type,
+      path: path,
+      data: data,
+    );
+
+    print("OBJECT ${id.fullAddress} | Update Path: ${path.pathString} | Total Keys: ${values.length}");
   }
 }
 

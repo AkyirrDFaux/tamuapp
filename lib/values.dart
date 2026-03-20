@@ -12,18 +12,14 @@ Map<Types, List<String>> typeToValueNames = {
     "PortError",
     "NoValue",
     "AutoObject",
+    "OutOfFlash",
+    "NotInFlash",
+    "FlashWritten"
   ],
   Types.Board: [
     "Undefined",
     "Tamu v1.0",
     "Tamu v2.0",
-  ],
-  Types.Port: [
-    "None",
-    "GPIO",
-    "TOut",
-    "SDA",
-    "SCL"
   ],
   Types.PortDriver: [
     "None",
@@ -127,4 +123,12 @@ bool isInValueEnum(Types type){
     return false;
   }
   return true;
+}
+
+Map<int, String>? getValueEnumMap(Types type) {
+  final List<String>? names = typeToValueNames[type];
+  if (names == null) return null;
+
+  // Converts ["OK", "InvalidID"] into {0: "OK", 1: "InvalidID"}
+  return names.asMap();
 }

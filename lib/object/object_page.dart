@@ -1,174 +1,171 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tamuapp/object/value_editor.dart';
 import '../bluetooth/bluetooth_manager.dart';
-import '../editables/value_display.dart';
+import 'value_display.dart';
 import '../functions.dart';
 import '../message/message.dart';
 import '../object/object_manager.dart';
 import '../types.dart';
 import 'object.dart';
-import '../editables/editable_field.dart';
 import '../flags.dart';
 
 class FlagsIconRow extends StatelessWidget {
-  final Object object;
-
+  final NodeObject object;
   const FlagsIconRow({super.key, required this.object});
 
-  // --- This method has been simplified ---
   void _toggleFlag(BuildContext context, Flags flag) {
-    // The core toggle logic remains simple due to the guard in _buildFlagIcon
     final newFlags = FlagClass(object.flags.value ^ flag.value);
-
-    // Send the message to update the flags
     Message message = Message();
     message.addSegment(Types.Function, Functions.SetFlags);
-    message.addSegment(Types.ID, object.id);
+    message.addSegment(Types.Reference, object.id);
     message.addSegment(Types.Flags, newFlags);
     BluetoothManager().sendMessage(message);
-    // The UI will update automatically via the Consumer once the ObjectManager is updated
   }
 
-  Widget _buildFlagIcon(BuildContext context,
-      {required Flags flag, required IconData icon, required String tooltip}) {
+  Widget _buildFlagIcon(BuildContext context, {required Flags flag, required IconData icon, required String tooltip}) {
+    final theme = Theme.of(context);
     final bool isActive = object.flags.hasFlag(flag);
-    final Color activeColor = Theme.of(context).colorScheme.primary;
-    final Color inactiveColor = Theme.of(context).disabledColor;
+    final Color iconColor = isActive ? theme.colorScheme.primary : theme.disabledColor;
 
-    // --- Logic for the read-only 'auto' flag ---
     if (flag == Flags.auto) {
       return Tooltip(
         message: '$tooltip (${isActive ? "Enabled" : "Disabled"})',
         child: Padding(
-          // Add padding to align it with the other IconButtons
-          padding: const EdgeInsets.all(8.0),
-          child: Icon(
-            icon,
-            color: isActive ? activeColor : inactiveColor,
-          ),
+          padding: const EdgeInsets.all(12.0),
+          child: Icon(icon, color: iconColor, size: 24),
         ),
       );
     }
 
-    // --- Logic to disable the mutually exclusive buttons ---
-    bool isBlocked = false;
-    String disabledTooltip = tooltip;
-
-    if (flag == Flags.runLoop && object.flags.hasFlag(Flags.runOnce)) {
-      isBlocked = true;
-      disabledTooltip = 'Cannot enable Run Loop while Run Once is active';
-    } else if (flag == Flags.runOnce && object.flags.hasFlag(Flags.runLoop)) {
-      isBlocked = true;
-      disabledTooltip = 'Cannot enable Run Once while Run Loop is active';
-    }
+    bool isBlocked = (flag == Flags.runLoop && object.flags.hasFlag(Flags.runOnce)) ||
+        (flag == Flags.runOnce && object.flags.hasFlag(Flags.runLoop));
 
     return IconButton(
       icon: Icon(icon),
-      color: isActive ? activeColor : inactiveColor,
-      onPressed:
-      isActive || !isBlocked ? () => _toggleFlag(context, flag) : null,
-      tooltip: isBlocked
-          ? disabledTooltip
-          : '$tooltip (${isActive ? "Enabled" : "Disabled"})',
+      color: iconColor,
+      style: isActive ? IconButton.styleFrom(backgroundColor: theme.colorScheme.primary.withOpacity(0.1)) : null,
+      onPressed: isActive || !isBlocked ? () => _toggleFlag(context, flag) : null,
+      tooltip: isBlocked ? 'Blocked by mutual exclusivity' : tooltip,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 8.0, // Horizontal space between icons
-          runSpacing: 4.0, // Vertical space between icon rows
-          children: [
-            _buildFlagIcon(
-              context,
-              flag: Flags.auto,
-              icon: Icons.settings_outlined,
-              tooltip: 'Auto',
-            ),
-            _buildFlagIcon(
-              context,
-              flag: Flags.runLoop,
-              icon: Icons.play_arrow_outlined,
-              tooltip: 'Run Loop',
-            ),
-            _buildFlagIcon(
-              context,
-              flag: Flags.runOnce,
-              icon: Icons.one_x_mobiledata_outlined,
-              tooltip: 'Run Once',
-            ),
-            _buildFlagIcon(
-              context,
-              flag: Flags.runOnStartup,
-              icon: Icons.power_settings_new_outlined,
-              tooltip: 'Run on Startup',
-            ),
-            _buildFlagIcon(
-              context,
-              flag: Flags.favourite,
-              icon: Icons.favorite_border,
-              tooltip: 'Favourite',
-            ),
-            _buildFlagIcon(
-              context,
-              flag: Flags.inactive,
-              icon: Icons.block_outlined,
-              tooltip: 'Inactive',
-            ),
-            // Add more icons for other flags as needed
-          ],
-        ),
-      ],
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(8)),
+      child: Wrap(
+        spacing: 4.0, runSpacing: 4.0,
+        children: [
+          _buildFlagIcon(context, flag: Flags.auto, icon: Icons.settings_outlined, tooltip: 'Auto'),
+          _buildFlagIcon(context, flag: Flags.runLoop, icon: Icons.play_arrow_outlined, tooltip: 'Run Loop'),
+          _buildFlagIcon(context, flag: Flags.runOnce, icon: Icons.one_x_mobiledata_outlined, tooltip: 'Run Once'),
+          _buildFlagIcon(context, flag: Flags.runOnStartup, icon: Icons.power_settings_new_outlined, tooltip: 'Startup'),
+          _buildFlagIcon(context, flag: Flags.favourite, icon: Icons.favorite_border, tooltip: 'Favourite'),
+          _buildFlagIcon(context, flag: Flags.inactive, icon: Icons.block_outlined, tooltip: 'Inactive'),
+        ],
+      ),
     );
   }
 }
 
 class ObjectPage extends StatefulWidget {
-  final Object object;
-
-  const ObjectPage({
-    super.key,
-    required this.object,
-  });
+  final NodeObject object;
+  const ObjectPage({super.key, required this.object});
 
   @override
   State<ObjectPage> createState() => _ObjectPageState();
 }
 
 class _ObjectPageState extends State<ObjectPage> {
-  @override
-  void initState() {
-    super.initState();
-  }
+  bool isEditMode = false;
 
-  void _refreshObject() {
-    Message message = Message();
-    message.addSegment(Types.Function, Functions.ReadObject);
-    message.addSegment(Types.ID, widget.object.id);
-    BluetoothManager().sendMessage(message);
+  void _openEditor(BuildContext context, NodeObject object, Reference ref, dynamic currentData, Types currentType) {
+    ValueEditor.show(
+      context,
+      ref,
+      currentData,
+      currentType,
+          (newType, newVal) {
+        context.read<ObjectManager>().writeValue(ref, newVal, type: newType);
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use a Consumer to listen for changes in ObjectManager
+    final theme = Theme.of(context);
+
     return Consumer<ObjectManager>(
       builder: (context, objectManager, child) {
-        // Get the latest version of the object from the ObjectManager
-        final object = objectManager.getObjectById(widget.object.id);
-
-        // Handle case where the object might have been deleted or not found
+        final object = objectManager.getObjectByRef(widget.object.id);
         if (object == null) {
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text("Object Not Found"),
-            ),
-            body: const Center(
-              child:
-              Text("This object could not be found in the Object Manager."),
+          return Scaffold(body: const Center(child: Text("Object not found")));
+        }
+
+        final entries = object.values.values.toList();
+
+        // Sort entries numerically: [1, 2] comes before [1, 10]
+        entries.sort((a, b) {
+          num lenA = a.path.indices.length;
+          num lenB = b.path.indices.length;
+          num minLen = lenA < lenB ? lenA : lenB;
+
+          for (int i = 0; i < minLen; i++) {
+            if (a.path.indices[i] != b.path.indices[i]) {
+              return a.path.indices[i].compareTo(b.path.indices[i]);
+            }
+          }
+          // If all shared indices are equal, the shorter path comes first
+          return lenA.compareTo(lenB);
+        });
+
+        // Generates path for a new sibling at a specific depth based on an existing path
+        Path generateSiblingPathAtDepth(Path source, int targetDepth) {
+          // Ensure we don't try to sublist more than exists
+          int safeDepth = targetDepth.clamp(0, source.indices.length);
+          List<int> newIndices = List<int>.from(source.indices.sublist(0, safeDepth));
+
+          if (newIndices.isNotEmpty) {
+            newIndices[newIndices.length - 1]++;
+          } else {
+            newIndices = [0]; // Fallback for root
+          }
+          return Path(newIndices);
+        }
+
+        Path generateChildPath(Path parent) {
+          List<int> childIndices = List<int>.from(parent.indices);
+          childIndices.add(0);
+          return Path(childIndices);
+        }
+
+        void _confirmDelete(BuildContext context) {
+          showDialog(
+            context: context,
+            builder: (numContext) => AlertDialog(
+              content: Text("Are you sure you want to DELETE '${object.name}'?"),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(numContext),
+                  child: const Text("CANCEL"),
+                ),
+                TextButton(
+                  onPressed: () {
+                    // 1. Tell MCU to destroy the object
+                    ObjectManager().deleteObject(object.id);
+
+                    // 2. Close the dialog
+                    Navigator.pop(numContext);
+
+                    // 3. Exit the ObjectPage
+                    Navigator.pop(context);
+                  },
+                  child: const Text("CONFIRM"),
+                ),
+              ],
             ),
           );
         }
@@ -178,223 +175,183 @@ class _ObjectPageState extends State<ObjectPage> {
             title: Text(object.name),
             actions: [
               IconButton(
-                icon: const Icon(Icons.delete),
+                icon: Icon(isEditMode ? Icons.check : Icons.edit_note_outlined),
+                tooltip: isEditMode ? "Save Changes" : "Toggle Edit Mode",
                 onPressed: () {
-                  Message message = Message();
-                  message.addSegment(Types.Function, Functions.DeleteObject);
-                  message.addSegment(Types.ID, object.id);
-                  BluetoothManager().sendMessage(message);
-                  Navigator.pop(context);
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.save),
-                onPressed: () {
-                  Message message = Message();
-                  message.addSegment(Types.Function, Functions.SaveObject);
-                  message.addSegment(Types.ID, object.id);
-                  BluetoothManager().sendMessage(message);
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.memory),
-                onPressed: () {
-                  Message message = Message();
-                  message.addSegment(Types.Function, Functions.ReadFile);
-                  message.addSegment(Types.ID, object.id);
-                  BluetoothManager().sendMessage(message);
+                  setState(() => isEditMode = !isEditMode);
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isEditMode ? "Edit Mode Enabled" : "Changes Locked"),
+                      duration: const Duration(milliseconds: 800),
+                    ),
+                  );
                 },
               ),
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: _refreshObject,
+                tooltip: "Refresh from MCU",
+                onPressed: () {
+                  ObjectManager().refreshObject(object.id);
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Refreshing ${object.name}..."),
+                      duration: const Duration(milliseconds: 800),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.save),
+                tooltip: "Save to Flash",
+                onPressed: () {
+                  ObjectManager().saveObject(object.id);
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Saving ${object.name} to Flash..."),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete),
+                tooltip: "Delete Object",
+                onPressed: () => _confirmDelete(context),
               ),
             ],
           ),
           body: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8.0),
-                        child: Icon(Icons.tag_outlined),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("ID", style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(object.formattedId),
-                          ],
-                        ),
-                      ),
-                      // ID is read-only, so no EditField is needed.
-                      // An empty SizedBox keeps the alignment consistent.
-                      const SizedBox(width: 48), // Width of a typical icon button
-                    ],
-                  ),
-                  const SizedBox(height: 16), // Increased spacing
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoSection(icon: Icons.fingerprint, label: "ADDRESS", value: object.id.toString(), theme: theme),
+                _buildInfoSection(icon: Icons.category_outlined, label: "CLASS TYPE", value: object.type.toString().split('.').last, theme: theme),
 
-                  // --- NEW: Formatted Type Section ---
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8.0),
-                        child: Icon(Icons.type_specimen_outlined),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Type", style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(object.type.toString().split('.').last),
-                          ],
-                        ),
-                      ),
-                      // Type is also read-only.
-                      const SizedBox(width: 48),
-                    ],
-                  ),
-                  const SizedBox(height: 16), // Increased spacing
+                const Text("FLAGS & STATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white38)),
+                FlagsIconRow(object: object),
+                const Divider(height: 32),
 
-                  // --- MODIFIED: Name Section (Label added for consistency) ---
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8.0),
-                        child: Icon(Icons.label_outline),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Name", style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(object.name),
-                          ],
-                        ),
-                      ),
-                      EditField(
-                          label: 'Name',
-                          initialValue: object.name,
-                          onChanged: (newValue) {
-                            if (newValue != null) {
-                              Message message = Message();
-                              message.addSegment(
-                                  Types.Function, Functions.WriteName);
-                              message.addSegment(Types.ID, object.id);
-                              message.addSegment(Types.Text, newValue);
-                              BluetoothManager().sendMessage(message);
-                            }
-                          },
-                          type: Types.Text
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  FlagsIconRow(object: object),
-                  const SizedBox(height: 16), // Increased spacing
+                Row(
+                  children: [
+                    Icon(Icons.terminal, size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    const Text("DATA TREE", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 12),
 
-                  // --- MODIFIED 'MODULES' SECTION ---
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8.0),
-                        child: Icon(Icons.device_hub_outlined),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Modules", style: TextStyle(fontWeight: FontWeight.bold)),
-                            ValueDisplay(
-                              value: object.modules,
-                              type: Types.IDList, // Use the correct type for formatting
-                            ),
-                          ],
-                        ),
-                      ),
-                      EditField(
-                          label: 'Modules',
-                          initialValue: object.modules,
-                          onChanged: (newValues) {
-                            if (newValues != null) {
-                              Message message = Message();
-                              message.addSegment(
-                                  Types.Function, Functions.SetModules);
-                              message.addSegment(Types.ID, object.id);
-                              message.addSegment(Types.IDList, newValues);
-                              BluetoothManager().sendMessage(message);
-                            }
-                          },
-                          type: Types.IDList
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16), // Increased spacing
+                ...entries.asMap().entries.expand((mapEntry) {
+                  final int index = mapEntry.key;
+                  final entry = mapEntry.value;
+                  final Path currentPath = entry.path;
+                  final int depth = currentPath.length;
 
-                  // --- MODIFIED 'VALUE' SECTION TO DISPLAY A LIST ---
-                  const Row(
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(right: 8.0),
-                        child: Icon(Icons.data_object_outlined),
-                      ),
-                      Text("Values", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Iterate through the list of values and display each one in a row
-                  for (var i = 0; i < object.value.length; i++)
+                  // Determine which depths end after this entry
+                  int nextDepth = (index < entries.length - 1)
+                      ? entries[index + 1].path.length
+                      : 0;
+
+                  bool hasChildren = nextDepth > depth;
+
+                  return [
+                    // --- NODE CARD ---
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const SizedBox(width: 32), // Indent the value rows
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(object.value[i].key.toString().split('.').last, style: const TextStyle(fontWeight: FontWeight.w500)),
-                                ValueDisplay(
-                                  value: object.value[i].value,
-                                  type: object.value[i].key,
-                                ),
-                              ],
-                            ),
+                      padding: EdgeInsets.only(left: (depth - 1) * 20.0, bottom: 6),
+                      child: InkWell(
+                        onTap: () => _openEditor(context, object, Reference(object.id.net, object.id.group, object.id.device, currentPath), entry.data, entry.type),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.secondary.withOpacity(0.3),
+                            border: Border(left: BorderSide(color: theme.colorScheme.primary, width: 4)),
                           ),
-                          EditField(
-                              label: "Value",
-                              initialValue: object.value[i].value,
-                              onChanged: (newValue) {
-                                if (newValue != null) {
-                                  // When one value changes, send only the changed value.
-                                  // The ID is the object ID + index + 1.
-                                  Message message = Message();
-                                  message.addSegment(Types.Function, Functions.WriteValue);
-                                  message.addSegment(Types.ID, object.id + i + 1);
-                                  message.addSegment(object.value[i].key, newValue);
-                                  BluetoothManager().sendMessage(message);
-                                }
-                              },
-                              type: object.value[i].key),
-                        ],
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    RichText(
+                                      text: TextSpan(
+                                        style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+                                        children: [
+                                          TextSpan(text: "PATH: ${currentPath.pathString} ", style: const TextStyle(color: Colors.white38)),
+                                          TextSpan(text: "(${entry.type.name})", style: TextStyle(color: theme.colorScheme.primary.withOpacity(0.6))),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    ValueDisplay(value: entry.data, type: entry.type),
+                                  ],
+                                ),
+                              ),
+                              if (isEditMode && !hasChildren)
+                                IconButton(
+                                  icon: const Icon(Icons.subdirectory_arrow_right, size: 18, color: Colors.white38),
+                                  onPressed: () {
+                                    final newPath = generateChildPath(currentPath);
+                                    _openEditor(context, object, Reference(object.id.net, object.id.group, object.id.device, newPath), null, Types.Undefined);
+                                  },
+                                  tooltip: "Add Child ${currentPath.pathString}.0",
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                ],
-              ),
+
+                    // --- SIBLING INSERTION SLOTS ---
+                    // If we are in edit mode, and the next node is shallower (or this is the end),
+                    // we show a button for every layer that just "closed".
+                    if (isEditMode && nextDepth < depth)
+                      ...List.generate(depth - nextDepth, (i) {
+                        int targetDepth = depth - i;
+                        Path siblingPath = generateSiblingPathAtDepth(currentPath, targetDepth);
+
+                        return Padding(
+                          padding: EdgeInsets.only(left: (targetDepth - 1) * 20.0, bottom: 8, top: 2),
+                          child: TextButton.icon(
+                            onPressed: () => _openEditor(context, object, Reference(object.id.net, object.id.group, object.id.device, siblingPath), null, Types.Undefined),
+                            icon: const Icon(Icons.add_circle_outline, size: 14),
+                            label: Text("ADD ${siblingPath.pathString}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                            style: TextButton.styleFrom(
+                              foregroundColor: theme.colorScheme.primary.withOpacity(0.8),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        );
+                      }),
+                  ];
+                }),
+              ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildInfoSection({required IconData icon, required String label, required String value, required ThemeData theme}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.white54),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38)),
+              Text(value, style: const TextStyle(fontSize: 16, fontFamily: 'monospace')),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import '../values.dart';
 import '../functions.dart';
-import '../flags.dart';
+import '../info.dart';
 import '../object/object.dart';
 import '../types.dart';
 
@@ -136,18 +136,23 @@ class Message {
   Uint8List _serializeData(Types type, dynamic data) {
     if (data == null) return Uint8List(0);
 
-    // Helper to pack 16.16 Fixed Point into 4 bytes
     void packFixed(ByteData view, int offset, dynamic val) {
       int fixedVal = ((val as num).toDouble() * 65536.0).round();
       view.setInt32(offset, fixedVal, Endian.little);
     }
 
-    // Helper to pack standard 32-bit Integer
     void packInt32(ByteData view, int offset, int val) {
       view.setInt32(offset, val, Endian.little);
     }
 
     switch (type) {
+      case Types.ObjectInfo:
+        if (data is ObjectInfo) {
+          // [FlagByte, TimingByte]
+          return Uint8List.fromList([data.flags.value & 0xFF, data.runTiming & 0xFF]);
+        }
+        return Uint8List(2);
+
       case Types.Bool:
         return Uint8List.fromList([(data == true || data == 1) ? 1 : 0]);
 
@@ -158,12 +163,6 @@ class Message {
       case Types.ObjectType:
         int val = (data is ObjectTypes) ? data.value : (data as int);
         return Uint8List.fromList([val & 0xFF]);
-
-      case Types.Flags:
-        final b = Uint8List(4);
-        int val = (data is FlagClass) ? data.value : (data as int);
-        packInt32(ByteData.view(b.buffer), 0, val);
-        return b;
 
       case Types.Integer:
       case Types.PortType:
@@ -194,7 +193,6 @@ class Message {
       case Types.Coord2D:
         final b = Uint8List(16);
         final view = ByteData.view(b.buffer);
-        // Position (X, Y) + Rotation Vector (X, Y)
         packFixed(view, 0, data.Position.X);
         packFixed(view, 4, data.Position.Y);
         packFixed(view, 8, data.Rotation.X);
@@ -222,15 +220,14 @@ class Message {
         return Uint8List(0);
 
       case Types.Colour:
-      // Packs as [R, G, B, A]
         return Uint8List.fromList([data.R, data.G, data.B, data.A]);
 
       case Types.Pin:
-        final b = Uint8List(2);
-        ByteData.view(b.buffer).setUint16(0, data as int, Endian.little);
-        return b;
+      // Matches: struct Pin { uint8_t Number; char Port; }
+        if (data is int) return Uint8List.fromList([data & 0xFF, 0]);
+        // If data is a custom Pin object, you'd pull data.Number and data.Port
+        return Uint8List.fromList([0, 0]);
 
-    // 1-Byte Hardware/Status/Enum types
       case Types.Board:
       case Types.Sensor:
       case Types.PortDriver:
@@ -248,10 +245,6 @@ class Message {
         int val = (data is Enum) ? (data as dynamic).index : (data as int);
         return Uint8List.fromList([val & 0xFF]);
 
-      /*case Types.Message:
-        if (data is Message) return data.toBytes();
-        return data as Uint8List;*/
-
       default:
         if (data is Uint8List) return data;
         return Uint8List(0);
@@ -263,25 +256,29 @@ class Message {
 
     final view = ByteData.view(raw.buffer, raw.offsetInBytes, raw.length);
 
-    // Helper to read 16.16 Fixed Point
     double toFixed(int offset) {
       if (offset + 4 > raw.length) return 0.0;
       return view.getInt32(offset, Endian.little) / 65536.0;
     }
 
-    // Helper to read standard 32-bit signed integers
     int readInt32(int offset) {
       if (offset + 4 > raw.length) return 0;
       return view.getInt32(offset, Endian.little);
     }
 
-    // Helper to read 8-bit unsigned integers
     int readUint8(int offset) {
       if (offset >= raw.length) return 0;
       return view.getUint8(offset);
     }
 
     switch (type) {
+      case Types.ObjectInfo:
+        if (raw.length < 2) return ObjectInfo();
+        return ObjectInfo(
+          flags: FlagClass(raw[0]),
+          runTiming: raw[1],
+        );
+
       case Types.Bool:
         return readUint8(0) != 0;
 
@@ -290,10 +287,6 @@ class Message {
 
       case Types.ObjectType:
         return ObjectTypes.fromValue(readUint8(0));
-
-      case Types.Flags:
-      // Flags are often bitmasks, usually 32-bit in this protocol
-        return FlagClass(readInt32(0));
 
       case Types.Integer:
         return readInt32(0);
@@ -311,13 +304,10 @@ class Message {
 
       case Types.Coord2D:
         if (raw.length < 16) return Coord2D(Vector2D(0, 0), Vector2D(1, 0));
-        return Coord2D(
-            Vector2D(toFixed(0), toFixed(4)),
-            Vector2D(toFixed(8), toFixed(12))
-        );
+        return Coord2D(Vector2D(toFixed(0), toFixed(4)), Vector2D(toFixed(8), toFixed(12)));
 
       case Types.Coord3D:
-        if (raw.length < 24) return Coord3D(Vector3D(0,0,0), Vector3D(0,0,0));
+        if (raw.length < 24) return Coord3D(Vector3D(0, 0, 0), Vector3D(0, 0, 0));
         return Coord3D(
             Vector3D(toFixed(0), toFixed(4), toFixed(8)),
             Vector3D(toFixed(12), toFixed(16), toFixed(20))
@@ -328,9 +318,7 @@ class Message {
           int len = raw.length;
           while (len > 0 && raw[len - 1] == 0) len--;
           return utf8.decode(raw.sublist(0, len));
-        } catch (e) {
-          return "Encoding Error";
-        }
+        } catch (e) { return "Encoding Error"; }
 
       case Types.Reference:
         return Reference.fromList(raw.toList());
@@ -343,10 +331,10 @@ class Message {
         return readInt32(0);
 
       case Types.Pin:
-        if (raw.length < 2) return 0;
-        return view.getUint16(0, Endian.little);
+      // Matches C++ struct Pin { uint8_t Number; char Port; }
+        if (raw.length < 2) return 0; // Or return a custom Pin object
+        return raw[0]; // Returning Number for now
 
-    // Grouping all 1-byte hardware/status/enum types
       case Types.Board:
       case Types.Sensor:
       case Types.PortDriver:
@@ -363,10 +351,6 @@ class Message {
       case Types.Input:
         return readUint8(0);
 
-      /*case Types.Message:
-        return Message.fromBytes(raw);*/
-
-      case Types.Undefined:
       default:
         return raw;
     }

@@ -4,7 +4,7 @@ import '../bluetooth/bluetooth_manager.dart';
 import '../functions.dart';
 import '../message/message.dart';
 import '../types.dart';
-import '../flags.dart';
+import '../info.dart';
 import 'object_manager.dart'; // Import your ObjectManager
 import 'object_page.dart';
 import 'object.dart';
@@ -68,74 +68,59 @@ class _ObjectListPageState extends State<ObjectListPage> {
     final theme = Theme.of(context);
     final manager = Provider.of<ObjectManager>(context);
 
-    // 1. Extract unique IDs currently in the list
+    // Extract unique IDs for the filter bar
     final availableNets = manager.objects.map((e) => e.id.net).toSet().toList()..sort();
-
-    // For Groups, we only show groups available within the currently selected NET (unless NET is *)
     final availableGroups = manager.objects
         .where((e) => selectedNet == null || e.id.net == selectedNet)
         .map((e) => e.id.group).toSet().toList()..sort();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Object List'),
+        title: const Text('Object Registry'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            tooltip: "Create New Object",
-            onPressed: () {
-              showNewObjectDialog(context);
-            },
+            onPressed: () => showNewObjectDialog(context),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: "Reload Registry",
-            onPressed: () {
-              manager.reloadObjects();
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Syncing object registry..."),
-                  duration: Duration(milliseconds: 800),
-                ),
-              );
-            },
+            icon: const Icon(Icons.sync),
+            onPressed: () => manager.reloadObjects(),
           ),
         ],
       ),
       body: Column(
         children: [
-          // --- DYNAMIC SELECTOR BAR ---
+          // Filter Bar
           Container(
-            color: theme.colorScheme.secondary.withOpacity(0.5),
+            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
             height: 50,
             child: Row(
               children: [
                 _buildHeaderBtn("NET", selectedNet, () =>
                     _showDynamicSelector("NET", availableNets, selectedNet, (v) => setState(() => selectedNet = v))),
-                VerticalDivider(color: Colors.white10, width: 1, indent: 10, endIndent: 10),
+                const VerticalDivider(width: 1),
                 _buildHeaderBtn("GROUP", selectedGroup, () =>
                     _showDynamicSelector("GROUP", availableGroups, selectedGroup, (v) => setState(() => selectedGroup = v))),
               ],
             ),
           ),
 
-          // --- FILTERED LIST ---
+          // The List
           Expanded(
             child: Consumer<ObjectManager>(
               builder: (context, manager, child) {
                 final filteredList = manager.objects.where((obj) {
-                  final netMatch = selectedNet == null || obj.id.net == selectedNet;
-                  final groupMatch = selectedGroup == null || obj.id.group == selectedGroup;
-                  return netMatch && groupMatch;
+                  return (selectedNet == null || obj.id.net == selectedNet) &&
+                      (selectedGroup == null || obj.id.group == selectedGroup);
                 }).toList();
 
                 if (filteredList.isEmpty) {
                   return const Center(child: Text('No objects found in this scope.'));
                 }
 
-                return ListView.builder(
+                return ListView.separated(
                   itemCount: filteredList.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 70),
                   itemBuilder: (context, index) => _buildObjectTile(context, filteredList[index]),
                 );
               },
@@ -171,43 +156,72 @@ class _ObjectListPageState extends State<ObjectListPage> {
 
   // Refactored your ListTile for cleaner code
   Widget _buildObjectTile(BuildContext context, NodeObject object) {
+    final theme = Theme.of(context);
+    final bool isInactive = object.info.flags.has(Flags.inactive);
+
     return ListTile(
-      leading: Icon(getIconForType(object.type)),
-      title: Text(object.name),
-      subtitle: Text('${object.id.fullAddress} - ${object.type.name}'),
-      trailing: object.type == Types.Program ? _buildProgramControls(object) : null,
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => ObjectPage(object: object))),
+      leading: CircleAvatar(
+        backgroundColor: isInactive ? Colors.white10 : theme.colorScheme.primaryContainer,
+        child: Icon(
+          getIconForType(object.type),
+          color: isInactive ? Colors.white24 : theme.colorScheme.onPrimaryContainer,
+        ),
+      ),
+      title: Text(
+        object.name,
+        style: TextStyle(
+          color: isInactive ? Colors.white38 : Colors.white,
+          decoration: isInactive ? TextDecoration.lineThrough : null,
+        ),
+      ),
+      subtitle: Row(
+        children: [
+          Text(object.id.fullAddress, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+          const SizedBox(width: 8),
+          if (object.info.flags.has(Flags.auto))
+            const Icon(Icons.hdr_auto_outlined, size: 12, color: Colors.orangeAccent),
+        ],
+      ),
+      trailing: _buildTrailing(object),
+      onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => ObjectPage(object: object))
+      ),
     );
+  }
+
+  Widget? _buildTrailing(NodeObject object) {
+    // If it's a program, show specialized play/stop buttons
+    // Otherwise, just a simple chevron
+    return (object.type == ObjectTypes.Program)
+        ? _buildProgramControls(object)
+        : const Icon(Icons.chevron_right, color: Colors.white10);
   }
 
   Widget _buildProgramControls(NodeObject object) {
-    bool isRunning = (object.flags.value & (Flags.runLoop.value | Flags.runOnce.value)) != 0;
+    bool isRunning = object.info.flags.has(Flags.runOnce) || object.info.flags.has(Flags.runOnStartup);
 
-    return isRunning
-        ? IconButton(
-      icon: const Icon(Icons.stop, color: Colors.redAccent),
-      onPressed: () => _sendFlagUpdate(object, object.flags.value & ~(Flags.runLoop.value | Flags.runOnce.value)),
-    )
-        : Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.one_x_mobiledata_outlined),
-          onPressed: () => _sendFlagUpdate(object, object.flags.value | Flags.runOnce.value),
-        ),
-        IconButton(
-          icon: const Icon(Icons.play_arrow_outlined),
-          onPressed: () => _sendFlagUpdate(object, object.flags.value | Flags.runLoop.value),
-        ),
-      ],
+    return IconButton(
+      icon: Icon(isRunning ? Icons.stop_circle_outlined : Icons.play_circle_outline),
+      color: isRunning ? Colors.redAccent : Colors.greenAccent,
+      onPressed: () {
+        final newFlags = FlagClass(object.info.flags.value);
+        if (isRunning) {
+          newFlags.remove(Flags.runOnce);
+          newFlags.remove(Flags.runOnStartup);
+        } else {
+          newFlags.add(Flags.runOnce);
+        }
+        _sendInfoUpdate(object, newFlags);
+      },
     );
   }
 
-  void _sendFlagUpdate(NodeObject object, int newFlags) {
-    Message message = Message();
-    message.addSegment(Types.Function, Functions.SetFlags);
-    message.addSegment(Types.Reference, object.id);
-    message.addSegment(Types.Flags, FlagClass(newFlags));
-    BluetoothManager().sendMessage(message);
+  void _sendInfoUpdate(NodeObject object, FlagClass newFlags) {
+    // UPDATED: Now uses ObjectInfo to ensure atomic update on MCU
+    final newInfo = ObjectInfo(
+      flags: newFlags,
+      runTiming: object.info.runTiming,
+    );
+    ObjectManager().writeInfo(object.id, newInfo);
   }
 }

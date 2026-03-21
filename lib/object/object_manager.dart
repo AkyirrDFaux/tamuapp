@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../bluetooth/bluetooth_manager.dart';
+import '../info.dart';
 import '../message/message.dart';
 import 'object.dart';
 import '../types.dart';
@@ -138,28 +139,23 @@ class ObjectManager extends ChangeNotifier {
     // 2. Find or Create
     NodeObject targetObject = getObjectByRef(objRef) ?? NodeObject(type: objType, id: objRef);
 
-    // 3. Metadata
-    targetObject.flags = entries[3].data;
+    // 3. Metadata - UPDATED: Now expects ObjectInfo instead of just FlagClass
+    if (entries[3].data is ObjectInfo) {
+      targetObject.info.flags.value = (entries[3].data as ObjectInfo).flags.value;
+      targetObject.info.runTiming = (entries[3].data as ObjectInfo).runTiming;
+    }
 
-    // Using standard String as per previous fix
     if (entries[4].data is String) {
       targetObject.name = entries[4].data;
     }
 
-    // 4. Process Tree Values (Index 5 onwards)
+    // 4. Process Tree Values
     for (int i = 5; i < entries.length; i++) {
       final entry = entries[i];
-
-      // 1. Extract the raw list from the existing Path object
       final List<int> rawIndices = List<int>.from(entry.path.indices);
-
-      // 2. Subtract the segment offset (5) from the first index
       if (rawIndices.isNotEmpty) {
         rawIndices[0] -= 5;
       }
-
-      // 3. Create a new Path instance with the corrected indices
-      // and pass it to updateValue
       targetObject.updateValue(Path(rawIndices), entry.type, entry.data);
     }
 
@@ -198,7 +194,7 @@ class ObjectManager extends ChangeNotifier {
     // UI will update when MCU echoes back the ReadValue response.
   }
 
-  void readFlags(Message message) {
+  void onReadInfoResponse(Message message) {
     final entries = message.valueEntries;
     if (entries.length < 3) return;
 
@@ -206,10 +202,22 @@ class ObjectManager extends ChangeNotifier {
     final Reference objRef = (refData is Reference) ? refData : Reference.fromList(refData);
 
     final targetObject = getObjectByRef(objRef);
-    if (targetObject != null) {
-      targetObject.flags = entries[2].data;
+    if (targetObject != null && entries[2].data is ObjectInfo) {
+      final ObjectInfo newInfo = entries[2].data as ObjectInfo;
+      targetObject.info.flags.value = newInfo.flags.value;
+      targetObject.info.runTiming = newInfo.runTiming;
       notifyListeners();
     }
+  }
+
+  /// Sends a request to update the ObjectInfo (Flags + Timing) on the MCU
+  void writeInfo(Reference ref, ObjectInfo info) {
+    Message message = Message();
+    message.addSegment(Types.Function, Functions.SetInfo);
+    message.addSegment(Types.Reference, ref);
+    message.addSegment(Types.ObjectInfo, info); // Ensure Types.ObjectInfo exists in your enum
+
+    BluetoothManager().sendMessage(message);
   }
 
   void runMessage(Message message) {
@@ -244,8 +252,8 @@ class ObjectManager extends ChangeNotifier {
       case Functions.ReadValue:
         readValue(message);
         break;
-      case Functions.ReadFlags:
-        readFlags(message);
+      case Functions.ReadInfo:
+        onReadInfoResponse(message);
         break;
       default:
         print("Function $functionCall not implemented.");

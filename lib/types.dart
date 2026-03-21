@@ -6,7 +6,7 @@ enum Types {
   Byte(2),
   Type(3),
   ObjectType(4),
-  Flags(5),
+  ObjectInfo(5),
   Status(6),
   Board(7),
   Sensor(8),
@@ -102,7 +102,7 @@ final Map<Types, IconData> typeIcons = {
   Types.Byte: Icons.data_array,
   Types.Type: Icons.category,
   Types.ObjectType: Icons.sell_outlined,
-  Types.Flags: Icons.flag_outlined,
+  Types.ObjectInfo: Icons.flag_outlined,
   Types.Status: Icons.info_outline,
   Types.Board: Icons.memory_outlined,
   Types.Sensor: Icons.sensors, // New

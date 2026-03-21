@@ -22,13 +22,16 @@ Map<Types, List<String>> typeToValueNames = {
     "Tamu v2.0",
   ],
   Types.PortDriver: [
-    "None",
-    "LED",
-    "FanPWM",
-    "I2C",
-    "I2CClock",
-    "Servo",
-    "Input"
+    "None",     // 0
+    "Input",    // 1
+    "Output",   // 2
+    "PWM",      // 3
+    "Servo",    // 4
+    "LED",      // 5
+    "I2C_SDA",  // 6
+    "I2C_SCL",  // 7
+    "UART_TX",  // 8
+    "UART_RX"   // 9
   ],
   Types.Geometry2D: [
     "None",

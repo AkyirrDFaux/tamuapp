@@ -8,45 +8,34 @@ import '../message/message.dart';
 import '../object/object_manager.dart';
 import '../types.dart';
 import 'object.dart';
-import '../flags.dart';
+import '../info.dart';
 
 class FlagsIconRow extends StatelessWidget {
   final NodeObject object;
   const FlagsIconRow({super.key, required this.object});
 
   void _toggleFlag(BuildContext context, Flags flag) {
-    final newFlags = FlagClass(object.flags.value ^ flag.value);
-    Message message = Message();
-    message.addSegment(Types.Function, Functions.SetFlags);
-    message.addSegment(Types.Reference, object.id);
-    message.addSegment(Types.Flags, newFlags);
-    BluetoothManager().sendMessage(message);
+    // Create a copy of the current info to modify
+    final newInfo = ObjectInfo(
+      flags: FlagClass(object.info.flags.value ^ flag.value),
+      runTiming: object.info.runTiming,
+    );
+
+    // Sync the entire Info block (Flags + Timing) to the MCU
+    ObjectManager().writeInfo(object.id, newInfo);
   }
 
   Widget _buildFlagIcon(BuildContext context, {required Flags flag, required IconData icon, required String tooltip}) {
     final theme = Theme.of(context);
-    final bool isActive = object.flags.hasFlag(flag);
+    final bool isActive = object.info.flags.has(flag); // Updated to use .has()
     final Color iconColor = isActive ? theme.colorScheme.primary : theme.disabledColor;
-
-    if (flag == Flags.auto) {
-      return Tooltip(
-        message: '$tooltip (${isActive ? "Enabled" : "Disabled"})',
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Icon(icon, color: iconColor, size: 24),
-        ),
-      );
-    }
-
-    bool isBlocked = (flag == Flags.runLoop && object.flags.hasFlag(Flags.runOnce)) ||
-        (flag == Flags.runOnce && object.flags.hasFlag(Flags.runLoop));
 
     return IconButton(
       icon: Icon(icon),
       color: iconColor,
       style: isActive ? IconButton.styleFrom(backgroundColor: theme.colorScheme.primary.withOpacity(0.1)) : null,
-      onPressed: isActive || !isBlocked ? () => _toggleFlag(context, flag) : null,
-      tooltip: isBlocked ? 'Blocked by mutual exclusivity' : tooltip,
+      onPressed: () => _toggleFlag(context, flag),
+      tooltip: tooltip,
     );
   }
 
@@ -59,12 +48,10 @@ class FlagsIconRow extends StatelessWidget {
       child: Wrap(
         spacing: 4.0, runSpacing: 4.0,
         children: [
-          _buildFlagIcon(context, flag: Flags.auto, icon: Icons.settings_outlined, tooltip: 'Auto'),
-          _buildFlagIcon(context, flag: Flags.runLoop, icon: Icons.play_arrow_outlined, tooltip: 'Run Loop'),
-          _buildFlagIcon(context, flag: Flags.runOnce, icon: Icons.one_x_mobiledata_outlined, tooltip: 'Run Once'),
-          _buildFlagIcon(context, flag: Flags.runOnStartup, icon: Icons.power_settings_new_outlined, tooltip: 'Startup'),
-          _buildFlagIcon(context, flag: Flags.favourite, icon: Icons.favorite_border, tooltip: 'Favourite'),
-          _buildFlagIcon(context, flag: Flags.inactive, icon: Icons.block_outlined, tooltip: 'Inactive'),
+          _buildFlagIcon(context, flag: Flags.auto, icon: Icons.hdr_auto_outlined, tooltip: 'Auto-Generated'),
+          _buildFlagIcon(context, flag: Flags.runOnce, icon: Icons.looks_one_outlined, tooltip: 'Run Once'),
+          _buildFlagIcon(context, flag: Flags.runOnStartup, icon: Icons.power_settings_new_outlined, tooltip: 'Run on Startup'),
+          _buildFlagIcon(context, flag: Flags.inactive, icon: Icons.pause_circle_outline, tooltip: 'Inactive/Disabled'),
         ],
       ),
     );
@@ -233,7 +220,29 @@ class _ObjectPageState extends State<ObjectPage> {
 
                 const Text("FLAGS & STATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white38)),
                 FlagsIconRow(object: object),
-                const Divider(height: 32),
+                _buildInfoSection(
+                    icon: Icons.timer_outlined,
+                    label: "RUN TIMING",
+                    value: "${object.info.runTiming}",
+                    theme: theme,
+                    onTap: () {
+                      // Open editor specifically for the RunTiming byte
+                      ValueEditor.show(
+                          context,
+                          object.id,
+                          object.info.runTiming,
+                          Types.Byte,
+                              (type, newValue) {
+                            final updatedInfo = ObjectInfo(
+                                flags: object.info.flags,
+                                runTiming: newValue as int
+                            );
+                            ObjectManager().writeInfo(object.id, updatedInfo);
+                          }
+                      );
+                    }
+                ),
+                const Divider(height: 16),
 
                 Row(
                   children: [
@@ -336,21 +345,34 @@ class _ObjectPageState extends State<ObjectPage> {
     );
   }
 
-  Widget _buildInfoSection({required IconData icon, required String label, required String value, required ThemeData theme}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.white54),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38)),
-              Text(value, style: const TextStyle(fontSize: 16, fontFamily: 'monospace')),
-            ],
-          ),
-        ],
+  Widget _buildInfoSection({
+    required IconData icon,
+    required String label,
+    required String value,
+    required ThemeData theme,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 20.0),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: onTap != null ? theme.colorScheme.primary : Colors.white54),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38)),
+                Text(value, style: const TextStyle(fontSize: 16, fontFamily: 'monospace')),
+              ],
+            ),
+            if (onTap != null) ...[
+              const Spacer(),
+              const Icon(Icons.edit, size: 14, color: Colors.white24),
+            ]
+          ],
+        ),
       ),
     );
   }

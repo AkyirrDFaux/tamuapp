@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+import '../info.dart';
 import 'object.dart';
 import 'object_manager.dart';
 import '../types.dart';
@@ -20,9 +21,9 @@ class ValueDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    TextStyle dataStyle = TextStyle(
+    TextStyle dataStyle = const TextStyle(
       fontSize: 15,
-      color: value == null ? Colors.white24 : Colors.white,
+      color: Colors.white,
       fontWeight: FontWeight.w500,
     );
 
@@ -31,18 +32,23 @@ class ValueDisplay extends StatelessWidget {
           style: dataStyle.copyWith(color: Colors.white24, fontStyle: FontStyle.italic));
     }
 
-    // 1. Handle Enums / Named Types
+    // 1. Handle ObjectInfo (New bundled type)
+    if (type == Types.ObjectInfo && value is ObjectInfo) {
+      return _buildObjectInfoSummary(value, theme);
+    }
+
+    // 2. Handle Enums / Named Types
     if (isInValueEnum(type) && value is int) {
       String name = getValueEnum(type, value) ?? "Unknown ($value)";
       return _buildEnumBadge(name, theme);
     }
 
-    // 2. Special Widget Builders (Colour)
+    // 3. Special Widget Builders (Colour)
     if (type == Types.Colour && value is Colour) {
       return _buildColourRow(value, dataStyle);
     }
 
-    // 3. Standard Text Output
+    // 4. Standard Text Output
     return Text(
       _getFormattedString(),
       style: dataStyle,
@@ -56,14 +62,14 @@ class ValueDisplay extends StatelessWidget {
           final hex = value.toRadixString(16).padLeft(2, '0').toUpperCase();
           return "$value (0x$hex)";
         }
-        return value.toString();
+        break;
 
       case Types.Bool:
         return (value == true || value == 1) ? "True" : "False";
 
       case Types.Number:
         if (value is num) return value.toStringAsFixed(2);
-        return value.toString();
+        break;
 
       case Types.Vector2D:
         if (value is Vector2D) return _formatVec2(value);
@@ -82,25 +88,33 @@ class ValueDisplay extends StatelessWidget {
 
       case Types.Coord3D:
         if (value is Coord3D) {
-          // For 3D, we usually just display the two vectors clearly
           return "Pos: [${_formatVec3(value.Position)}], Rot: [${_formatVec3(value.Rotation)}]";
         }
-        break;
-
-      case Types.Reference:
-        return value.toString();
-
-      case Types.Text:
-        return value.toString();
-
-      case Types.Flags:
-        if (value is int) return "Bits: ${value.toRadixString(2).padLeft(8, '0')}";
         break;
 
       default:
         return value.toString();
     }
     return value.toString();
+  }
+
+  // --- New Builders ---
+
+  Widget _buildObjectInfoSummary(ObjectInfo info, ThemeData theme) {
+    bool isInactive = info.flags.has(Flags.inactive);
+    return Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _buildEnumBadge("Timing: ${info.runTiming}ms", theme),
+        if (isInactive)
+          _buildEnumBadge("INACTIVE", theme, color: Colors.redAccent),
+        Text(
+          "Flags: ${info.flags}",
+          style: const TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'monospace'),
+        ),
+      ],
+    );
   }
 
   // --- Formatting Helpers ---
@@ -111,19 +125,20 @@ class ValueDisplay extends StatelessWidget {
   String _formatVec3(Vector3D v) =>
       "X: ${v.X.toStringAsFixed(1)}, Y: ${v.Y.toStringAsFixed(1)}, Z: ${v.Z.toStringAsFixed(1)}";
 
-  Widget _buildEnumBadge(String label, ThemeData theme) {
+  Widget _buildEnumBadge(String label, ThemeData theme, {Color? color}) {
+    final activeColor = color ?? theme.colorScheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.1),
+        color: activeColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
+        border: Border.all(color: activeColor.withOpacity(0.4)),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: theme.colorScheme.primary,
-          fontSize: 13,
+          color: activeColor,
+          fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -135,8 +150,7 @@ class ValueDisplay extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 14,
-          height: 14,
+          width: 14, height: 14,
           decoration: BoxDecoration(
             color: Color.fromARGB(c.A, c.R, c.G, c.B),
             shape: BoxShape.circle,
@@ -144,7 +158,7 @@ class ValueDisplay extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Text("R:${c.R} G:${c.G} B:${c.B} A:${c.A}", style: baseStyle),
+        Text("RGBA(${c.R},${c.G},${c.B},${c.A})", style: baseStyle),
       ],
     );
   }

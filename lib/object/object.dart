@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import '../flags.dart';
+import '../info.dart';
 import '../types.dart';
 
 class Path {
@@ -94,12 +94,19 @@ class NodeObject {
   final ObjectTypes type;
   final Reference id; // Global Address (Net, Group, Device)
   String name;
-  FlagClass flags = FlagClass();
+
+  // UPDATED: Now uses ObjectInfo to bundle Flags and RunTiming
+  final ObjectInfo info;
 
   // The key is the Path string (e.g., "0", "1.2")
   final SplayTreeMap<String, ValueEntry> values = SplayTreeMap<String, ValueEntry>();
 
-  NodeObject({required this.type, required this.id, this.name = "Unnamed"});
+  NodeObject({
+    required this.type,
+    required this.id,
+    this.name = "Unnamed",
+    ObjectInfo? info,
+  }) : info = info ?? ObjectInfo();
 
   List<ValueEntry> get sortedValues => values.values.toList();
 
@@ -112,6 +119,14 @@ class NodeObject {
     );
 
     print("OBJECT ${id.fullAddress} | Update Path: ${path.pathString} | Total Keys: ${values.length}");
+  }
+
+  /// Helper to check if object is currently ignored by the MCU
+  bool get isInactive => info.flags.has(Flags.inactive);
+
+  /// Helper to set the object to run once on the next MCU cycle
+  void triggerRunOnce() {
+    info.flags.add(Flags.runOnce);
   }
 }
 

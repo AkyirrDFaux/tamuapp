@@ -513,87 +513,30 @@ class _ValueEditorState extends State<ValueEditor> {
   }
 
   Widget _buildReferenceEditor(Reference r, Function(Reference) onUpdate) {
+    // Helper to wrap the update with a debug print
+    void handleUpdate(Reference next) {
+      debugPrint("DEBUG UI (Reference): Net:${next.net} GP:${next.group} DEV:${next.device} Path:${next.location.indices}");
+      onUpdate(next);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionLabel("PHYSICAL ADDRESS (NET.GP.DEV)"),
         Row(
           children: [
-            // Use SizedBox to give the byte fields a concrete width in the Row
-            SizedBox(width: 60, child: _buildByteField("NET", r.net, (v) => onUpdate(Reference(v, r.group, r.device, r.location)))),
+            SizedBox(width: 60, child: _buildByteField("NET", r.net, (v) => handleUpdate(Reference(v, r.group, r.device, r.location)))),
             const SizedBox(width: 8),
-            SizedBox(width: 60, child: _buildByteField("GP", r.group, (v) => onUpdate(Reference(r.net, v, r.device, r.location)))),
+            SizedBox(width: 60, child: _buildByteField("GP", r.group, (v) => handleUpdate(Reference(r.net, v, r.device, r.location)))),
             const SizedBox(width: 8),
-            SizedBox(width: 60, child: _buildByteField("DEV", r.device, (v) => onUpdate(Reference(r.net, r.group, v, r.location)))),
+            SizedBox(width: 60, child: _buildByteField("DEV", r.device, (v) => handleUpdate(Reference(r.net, r.group, v, r.location)))),
           ],
         ),
         const SizedBox(height: 20),
         _sectionLabel("LOCAL PATH SEGMENTS"),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.black26,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-            children: [
-              // FIX: Added 'return' inside the map loop
-              ...r.location.indices.asMap().entries.map((entry) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  child: Row(
-                    children: [
-                      Text("${entry.key}:", style: const TextStyle(fontFamily: 'monospace', color: Colors.white24, fontSize: 12)),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 80,
-                        child: TextFormField(
-                          key: ValueKey("path_${entry.key}_${entry.value}"),
-                          initialValue: entry.value.toString(),
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                            border: OutlineInputBorder(),
-                          ),
-                          onFieldSubmitted: (v) {
-                            final parsed = int.tryParse(v);
-                            if (parsed != null) {
-                              List<int> newIndices = List.from(r.location.indices);
-                              newIndices[entry.key] = parsed.clamp(0, 255);
-                              onUpdate(Reference(r.net, r.group, r.device, Path(newIndices)));
-                            }
-                          },
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
-                        onPressed: () {
-                          List<int> newIndices = List.from(r.location.indices)..removeAt(entry.key);
-                          onUpdate(Reference(r.net, r.group, r.device, Path(newIndices)));
-                        },
-                      )
-                    ],
-                  ),
-                );
-              }),
-
-              const Divider(height: 20, indent: 12, endIndent: 12),
-
-              TextButton.icon(
-                onPressed: () {
-                  List<int> newIndices = List.from(r.location.indices)..add(0);
-                  onUpdate(Reference(r.net, r.group, r.device, Path(newIndices)));
-                },
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text("ADD PATH SEGMENT"),
-              ),
-              const SizedBox(height: 4),
-            ],
-          ),
-        ),
+        _buildPathSegmentList(r.location, (newPath) {
+          handleUpdate(Reference(r.net, r.group, r.device, newPath));
+        }),
       ],
     );
   }
@@ -604,78 +547,89 @@ class _ValueEditorState extends State<ValueEditor> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _sectionLabel("PATH SEGMENTS (INDICES)"),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.black26,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-            children: [
-              if (p.indices.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text("Root (Empty Path)", style: TextStyle(color: Colors.white24, fontSize: 12)),
-                ),
-
-              // Map the indices to vertical rows
-              ...p.indices.asMap().entries.map((entry) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  child: Row(
-                    children: [
-                      Text("${entry.key}:", style: const TextStyle(fontFamily: 'monospace', color: Colors.white24, fontSize: 12)),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 80,
-                        child: TextFormField(
-                          key: ValueKey("standalone_path_${entry.key}_${entry.value}"),
-                          initialValue: entry.value.toString(),
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                            border: OutlineInputBorder(),
-                          ),
-                          onFieldSubmitted: (v) {
-                            final parsed = int.tryParse(v);
-                            if (parsed != null) {
-                              List<int> newIndices = List.from(p.indices);
-                              newIndices[entry.key] = parsed.clamp(0, 255);
-                              onUpdate(Path(newIndices));
-                            }
-                          },
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, size: 18, color: Colors.white30),
-                        onPressed: () {
-                          List<int> newIndices = List.from(p.indices)..removeAt(entry.key);
-                          onUpdate(Path(newIndices));
-                        },
-                      )
-                    ],
-                  ),
-                );
-              }),
-
-              const Divider(height: 20, indent: 12, endIndent: 12),
-
-              TextButton.icon(
-                onPressed: () {
-                  List<int> newIndices = List.from(p.indices)..add(0);
-                  onUpdate(Path(newIndices));
-                },
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text("ADD SEGMENT"),
-              ),
-              const SizedBox(height: 4),
-            ],
-          ),
-        ),
+        _buildPathSegmentList(p, (nextPath) {
+          debugPrint("DEBUG UI (Standalone Path): ${nextPath.indices}");
+          onUpdate(nextPath);
+        }),
       ],
+    );
+  }
+
+  Widget _buildPathSegmentList(Path p, Function(Path) onUpdate) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        children: [
+          if (p.indices.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text("Root (Empty Path)", style: TextStyle(color: Colors.white24, fontSize: 12)),
+            ),
+
+          ...p.indices.asMap().entries.map((entry) {
+            final index = entry.key;
+            final val = entry.value;
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                children: [
+                  Text("$index:", style: const TextStyle(fontFamily: 'monospace', color: Colors.white24, fontSize: 12)),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      key: ValueKey("segment_${index}_$val"),
+                      // Use selection collapsed to keep cursor at end during rebuilds
+                      controller: TextEditingController(text: val.toString())
+                        ..selection = TextSelection.collapsed(offset: val.toString().length),
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) {
+                        final parsed = int.tryParse(v);
+                        if (parsed != null) {
+                          List<int> next = List.from(p.indices);
+                          next[index] = parsed.clamp(0, 255);
+                          // Trigger the update immediately on every keystroke
+                          onUpdate(Path(next));
+                        }
+                      },
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, size: 18, color: Colors.redAccent),
+                    onPressed: () {
+                      List<int> next = List.from(p.indices)..removeAt(index);
+                      onUpdate(Path(next));
+                    },
+                  )
+                ],
+              ),
+            );
+          }),
+
+          const Divider(height: 20, indent: 12, endIndent: 12),
+          TextButton.icon(
+            onPressed: () {
+              List<int> next = List.from(p.indices)..add(0);
+              onUpdate(Path(next));
+            },
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text("ADD SEGMENT"),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
     );
   }
 

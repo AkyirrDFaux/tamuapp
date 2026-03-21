@@ -11,8 +11,8 @@ enum Functions {
   WriteValue(9),
   ReadName(10),
   WriteName(11),
-  ReadFlags(12),
-  SetFlags(13),
+  ReadInfo(12),
+  SetInfo(13),
   ReadFile(14);
 
   final int value;

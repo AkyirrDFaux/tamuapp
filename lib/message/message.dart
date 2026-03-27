@@ -145,6 +145,10 @@ class Message {
       view.setInt32(offset, val, Endian.little);
     }
 
+    void packUint32(ByteData view, int offset, int val) {
+      view.setUint32(offset, val, Endian.little);
+    }
+
     switch (type) {
       case Types.ObjectInfo:
         if (data is ObjectInfo) {
@@ -165,10 +169,14 @@ class Message {
         return Uint8List.fromList([val & 0xFF]);
 
       case Types.Integer:
-      case Types.PortType:
         final b = Uint8List(4);
         packInt32(ByteData.view(b.buffer), 0, data as int);
         return b;
+      case Types.PortType:
+        final b = Uint8List(4);
+        packUint32(ByteData.view(b.buffer), 0, data as int);
+        return b;
+
 
       case Types.Number:
         final b = Uint8List(4);
@@ -231,7 +239,7 @@ class Message {
       case Types.Board:
       case Types.Sensor:
       case Types.PortDriver:
-      case Types.AccGyr:
+      case Types.I2CDevice:
       case Types.Geometry2D:
       case Types.GeometryOperation:
       case Types.Operation:
@@ -264,6 +272,11 @@ class Message {
     int readInt32(int offset) {
       if (offset + 4 > raw.length) return 0;
       return view.getInt32(offset, Endian.little);
+    }
+
+    int readUint32(int offset) {
+      if (offset + 4 > raw.length) return 0;
+      return view.getUint32(offset, Endian.little);
     }
 
     int readUint8(int offset) {
@@ -328,7 +341,7 @@ class Message {
         return Colour(raw[0], raw[1], raw[2], raw[3]);
 
       case Types.PortType:
-        return readInt32(0);
+        return readUint32(0);
 
       case Types.Pin:
       // Matches C++ struct Pin { uint8_t Number; char Port; }
@@ -338,7 +351,7 @@ class Message {
       case Types.Board:
       case Types.Sensor:
       case Types.PortDriver:
-      case Types.AccGyr:
+      case Types.I2CDevice:
       case Types.Geometry2D:
       case Types.GeometryOperation:
       case Types.Operation:

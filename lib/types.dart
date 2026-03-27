@@ -11,7 +11,7 @@ enum Types {
   Board(7),
   Sensor(8),
   PortDriver(9),
-  AccGyr(10),
+  I2CDevice(10),
   Input(11),
   LEDStrip(12),
   Texture1D(13),
@@ -55,45 +55,38 @@ enum ObjectTypes {
   LEDStrip(2),
   Display(3),
   Input(4),
-  Program(5),
-  I2C(6),
-  UART(7),
-  SPI(8),
-  OLED(9);
+  Sensor(5),
+  Output(6),
+  Program(7),
+  I2C(8),
+  UART(9),
+  SPI(10),
+  OLED(11);
 
   final int value;
   const ObjectTypes(this.value);
 
   static ObjectTypes fromValue(int value) {
-    for (var type in ObjectTypes.values) {
-      if (type.value == value) {
-        return type;
-      }
-    }
-    return ObjectTypes.Undefined;
+    return ObjectTypes.values.firstWhere(
+          (t) => t.value == value,
+      orElse: () => ObjectTypes.Undefined,
+    );
   }
 }
 
 final Map<ObjectTypes, IconData> objectTypeIcons = {
   ObjectTypes.Undefined: Icons.help_outline,
-  //ObjectTypes.Shape2D: Icons.category_outlined,
   ObjectTypes.Board: Icons.memory_outlined,
-  //ObjectTypes.Port: Icons.lan_outlined,
-  //ObjectTypes.Fan: Icons.wind_power_outlined,
   ObjectTypes.LEDStrip: Icons.wb_incandescent_outlined,
-  //ObjectTypes.LEDSegment: Icons.view_agenda_outlined,
-  //ObjectTypes.Texture1D: Icons.linear_scale_outlined,
   ObjectTypes.Display: Icons.desktop_windows_outlined,
-  //ObjectTypes.Geometry2D: Icons.square_foot_outlined,
-  //ObjectTypes.Texture2D: Icons.texture_outlined,
-  //ObjectTypes.AccGyr: Icons.gps_not_fixed_outlined,
-  //ObjectTypes.Servo: Icons.precision_manufacturing_outlined,
-  ObjectTypes.Input: Icons.input_outlined,
-  //ObjectTypes.Operation: Icons.settings_outlined,
+  ObjectTypes.Input: Icons.login_outlined,      // Specific "Input" feel
+  ObjectTypes.Sensor: Icons.sensors,            // New: Matches SensorClass
+  ObjectTypes.Output: Icons.logout_outlined,    // New: Logical counterpart to Input
   ObjectTypes.Program: Icons.terminal_outlined,
   ObjectTypes.I2C: Icons.account_tree_outlined,
-  ObjectTypes.UART: Icons.account_tree_outlined,
-  ObjectTypes.SPI: Icons.account_tree_outlined,
+  ObjectTypes.UART: Icons.settings_input_component,
+  ObjectTypes.SPI: Icons.cable,
+  ObjectTypes.OLED: Icons.tv_outlined,
 };
 
 final Map<Types, IconData> typeIcons = {
@@ -107,7 +100,7 @@ final Map<Types, IconData> typeIcons = {
   Types.Board: Icons.memory_outlined,
   Types.Sensor: Icons.sensors, // New
   Types.PortDriver: Icons.tune_outlined,
-  Types.AccGyr: Icons.screen_rotation,
+  Types.I2CDevice: Icons.screen_rotation,
   Types.Input: Icons.input_outlined,
   Types.LEDStrip: Icons.wb_incandescent_outlined,
   Types.Texture1D: Icons.linear_scale_outlined,

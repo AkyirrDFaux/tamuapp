@@ -17,21 +17,23 @@ Map<Types, List<String>> typeToValueNames = {
     "FlashWritten"
   ],
   Types.Board: [
-    "Undefined",
-    "Tamu v1.0",
-    "Tamu v2.0",
+    "Undefined",    // 0
+    "Tamu v1.0",    // 1
+    "Tamu v2.0",    // 2
+    "Reserved", "Reserved", "Reserved", "Reserved",
+    "Reserved", "Reserved", "Reserved", "Reserved", "Reserved",
+    "Valu v2.0",    // 12
   ],
   Types.PortDriver: [
     "None",     // 0
     "Input",    // 1
-    "Output",   // 2
-    "PWM",      // 3
-    "Servo",    // 4
-    "LED",      // 5
-    "I2C_SDA",  // 6
-    "I2C_SCL",  // 7
-    "UART_TX",  // 8
-    "UART_RX"   // 9
+    "Analog",   // 2
+    "Output",   // 3
+    "LED",      // 4
+    "I2C_SDA",  // 5
+    "I2C_SCL",  // 6
+    "UART_TX",  // 7
+    "UART_RX",  // 8
   ],
   Types.Geometry2D: [
     "None",
@@ -48,6 +50,7 @@ Map<Types, List<String>> typeToValueNames = {
     "None",
     "Full",
     "Blend",
+    "Point",    // Added missing index
     "Noise",
   ],
   Types.Texture2D: [
@@ -64,23 +67,31 @@ Map<Types, List<String>> typeToValueNames = {
     "XOR",
   ],
   Types.Display: [
-    "Undefined",
-    "Vysi v1.0",
+    "Undefined",        // 0
+    "GenericLEDMatrix", // 1
+    "Reserved", "Reserved", "Reserved", "Reserved",
+    "Reserved", "Reserved", "Reserved", "Reserved",
+    "Vysi v1.0",        // 10
   ],
   Types.LEDStrip: [
     "Undefined",
     "Generic RGB",
     "Generic RGBW"
   ],
-  Types.AccGyr: [
+  Types.I2CDevice: [
     "Undefined",
     "LSM6DS3TRC"
   ],
-  Types.Input :  [
-  "Undefined",
-  "Button",
-  "ButtonWithLED",
-  "Analog"
+  Types.Input: [
+    "Undefined",
+    "Button",
+    "ButtonWithLED",
+  ],
+  Types.Sensor: [       // Added missing SensorTypes
+    "Undefined",
+    "AnalogVoltage",
+    "TempNTC10K",
+    "Light10K"
   ],
   Types.Program: [
     "None",
@@ -108,7 +119,9 @@ Map<Types, List<String>> typeToValueNames = {
     "AddDelay",
     "IfSwitch",
     "While",
-    "SetActivity",
+    "SetFlags",    // Updated from SetActivity
+    "ResetFlags",  // Added
+    "Sine"         // Added
   ],
 };
 
@@ -134,4 +147,35 @@ Map<int, String>? getValueEnumMap(Types type) {
 
   // Converts ["OK", "InvalidID"] into {0: "OK", 1: "InvalidID"}
   return names.asMap();
+}
+
+class PortFlags {
+  static const Map<int, String> names = {
+    0: "None",
+    1 << 0: "GPIO",
+    1 << 1: "ADC",
+    1 << 2: "PWM",
+    1 << 3: "TOut",
+    1 << 4: "Internal",
+    1 << 8: "I2C_SDA",
+    1 << 9: "I2C_SCL",
+    1 << 12: "UART_TX",
+    1 << 13: "UART_RX",
+    1 << 16: "SPI_MOSI",
+    1 << 17: "SPI_MISO",
+    1 << 18: "SPI_CLK",
+    1 << 19: "SPI_CS",
+    1 << 20: "SPI_DRST",
+    1 << 21: "SPI_DDC",
+  };
+
+  /// Helper to get a list of all active flag names from a bitmask value
+  static List<String> getActiveFlags(int mask) {
+    if (mask == 0) return ["None"];
+
+    return names.entries
+        .where((e) => e.key != 0 && (mask & e.key) != 0)
+        .map((e) => e.value)
+        .toList();
+  }
 }

@@ -18,12 +18,9 @@ class FlagClass {
   FlagClass([this.value = 0]);
 
   bool has(Flags flag) => (value & flag.value) != 0;
-
   void add(Flags flag) => value |= flag.value;
-
   void remove(Flags flag) => value &= ~flag.value;
 
-  // Manual bit manipulation by index (0-7)
   void setBit(int index) {
     if (index >= 0 && index < 8) value |= (1 << index);
   }
@@ -36,16 +33,30 @@ class FlagClass {
     return (index >= 0 && index < 8) ? (value & (1 << index)) != 0 : false;
   }
 
+  /// Returns a list of active Flag names
+  List<String> get activeNames {
+    if (value == 0) return ["none"];
+    return Flags.values
+        .where((f) => f != Flags.none && has(f))
+        .map((f) => f.name)
+        .toList();
+  }
+
   @override
-  String toString() => value.toRadixString(2).padLeft(8, '0');
+  String toString() => "0b${value.toRadixString(2).padLeft(8, '0')} (${activeNames.join(', ')})";
 }
 
 class ObjectInfo {
   FlagClass flags;
-  int runTiming; // uint8_t equivalent
+  int runTiming;
 
   ObjectInfo({
     FlagClass? flags,
     this.runTiming = 0,
   }) : flags = flags ?? FlagClass();
+
+  @override
+  String toString() {
+    return "Timing: ${runTiming}ms, Flags: $flags";
+  }
 }

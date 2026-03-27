@@ -48,6 +48,17 @@ class ValueDisplay extends StatelessWidget {
       return _buildColourRow(value, dataStyle);
     }
 
+    if (type == Types.PortType && value is int) {
+      // Get the list of active flag names
+      final activeFlags = PortFlags.getActiveFlags(value);
+
+      // Return a standard Text widget with the flags joined by a separator
+      return Text(
+        activeFlags.join(", "),
+        style: dataStyle,
+      );
+    }
+
     // 4. Standard Text Output
     return Text(
       _getFormattedString(),

@@ -157,6 +157,11 @@ class Message {
         }
         return Uint8List(2);
 
+      case Types.PortNumber:
+      // C++ int8_t: Ensure value is within -128 to 127
+        int val = (data is int) ? data : 0;
+        return Uint8List.fromList([val.toSigned(8) & 0xFF]);
+
       case Types.Bool:
         return Uint8List.fromList([(data == true || data == 1) ? 1 : 0]);
 
@@ -284,7 +289,15 @@ class Message {
       return view.getUint8(offset);
     }
 
+    int readInt8(int offset) {
+      if (offset >= raw.length) return 0;
+      return view.getInt8(offset);
+    }
+
     switch (type) {
+      case Types.PortNumber:
+        return readInt8(0);
+
       case Types.ObjectInfo:
         if (raw.length < 2) return ObjectInfo();
         return ObjectInfo(

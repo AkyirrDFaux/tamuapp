@@ -69,6 +69,7 @@ class _ValueEditorState extends State<ValueEditor> {
 
   dynamic _getDefaultValueForType(Types type) {
     switch (type) {
+      case Types.PortNumber: return -1;
       case Types.Bool:      return false;
       case Types.Byte:      return 0;
       case Types.Integer:   return 0;
@@ -152,6 +153,38 @@ class _ValueEditorState extends State<ValueEditor> {
           title: const Text("Boolean State"),
           value: currentValue == true,
           onChanged: (v) => _updateValue(v),
+        );
+
+      case Types.PortNumber:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionLabel("PORT INDEX"),
+            TextField(
+              controller: _textController,
+              decoration: const InputDecoration(
+                labelText: "Port ID",
+                hintText: "0-127 (or -1)",
+                suffixText: "int8",
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(signed: true),
+              onChanged: (v) {
+                int? parsed = int.tryParse(v);
+                if (parsed != null) {
+                  // Only allow positive values or exactly -1
+                  if (parsed >= 0 || parsed == -1) {
+                    _updateValue(parsed.clamp(-1, 127));
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Valid range: 0 to 127. Use -1 for unassigned.",
+              style: TextStyle(fontSize: 10, color: Colors.white38),
+            ),
+          ],
         );
 
       case Types.Byte:
@@ -512,28 +545,85 @@ class _ValueEditorState extends State<ValueEditor> {
     );
   }
 
+  int _refEditMode = 0; // 0 for Link, 1 for Manual
+
   Widget _buildReferenceEditor(Reference r, Function(Reference) onUpdate) {
-    // Helper to wrap the update with a debug print
+    final theme = Theme.of(context);
+    final List<NodeObject> availableObjects = ObjectManager().objects;
+
     void handleUpdate(Reference next) {
-      debugPrint("DEBUG UI (Reference): Net:${next.net} GP:${next.group} DEV:${next.device} Path:${next.location.indices}");
       onUpdate(next);
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel("PHYSICAL ADDRESS (NET.GP.DEV)"),
-        Row(
-          children: [
-            SizedBox(width: 60, child: _buildByteField("NET", r.net, (v) => handleUpdate(Reference(v, r.group, r.device, r.location)))),
-            const SizedBox(width: 8),
-            SizedBox(width: 60, child: _buildByteField("GP", r.group, (v) => handleUpdate(Reference(r.net, v, r.device, r.location)))),
-            const SizedBox(width: 8),
-            SizedBox(width: 60, child: _buildByteField("DEV", r.device, (v) => handleUpdate(Reference(r.net, r.group, v, r.location)))),
-          ],
+        // 1. Mode Switcher (Slider-style toggle)
+        Center(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ToggleButtons(
+              isSelected: [_refEditMode == 0, _refEditMode == 1],
+              onPressed: (index) => setState(() => _refEditMode = index),
+              borderRadius: BorderRadius.circular(8),
+              constraints: const BoxConstraints(minHeight: 32, minWidth: 120),
+              selectedColor: theme.colorScheme.onPrimary,
+              fillColor: theme.colorScheme.primary.withOpacity(0.8),
+              children: const [
+                Text("LINK OBJECT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                Text("MANUAL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 20),
-        _sectionLabel("LOCAL PATH SEGMENTS"),
+        const SizedBox(height: 16),
+
+        // 2. Dynamic Input Area (Switches based on mode)
+        SizedBox(
+          height: 60, // Keep height consistent to prevent jumping
+          child: _refEditMode == 0
+              ? DropdownButtonFormField<String>(
+            decoration: const InputDecoration(
+              labelText: "Select Object",
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            value: availableObjects.any((obj) =>
+            obj.id.net == r.net && obj.id.group == r.group && obj.id.device == r.device)
+                ? "${r.net}.${r.group}.${r.device}"
+                : null,
+            items: availableObjects.map((obj) {
+              final addr = "${obj.id.net}.${obj.id.group}.${obj.id.device}";
+              return DropdownMenuItem(
+                value: addr,
+                child: Text("${obj.name} ($addr)", style: const TextStyle(fontSize: 13)),
+              );
+            }).toList(),
+            onChanged: (addr) {
+              if (addr != null) {
+                final p = addr.split('.').map(int.parse).toList();
+                handleUpdate(Reference(p[0], p[1], p[2], r.location));
+              }
+            },
+          )
+              : Row(
+            children: [
+              Expanded(child: _buildByteField("NET", r.net, (v) => handleUpdate(Reference(v, r.group, r.device, r.location)))),
+              const SizedBox(width: 8),
+              Expanded(child: _buildByteField("GP", r.group, (v) => handleUpdate(Reference(r.net, v, r.device, r.location)))),
+              const SizedBox(width: 8),
+              Expanded(child: _buildByteField("DEV", r.device, (v) => handleUpdate(Reference(r.net, r.group, v, r.location)))),
+            ],
+          ),
+        ),
+
+        const Divider(height: 32, color: Colors.white10),
+
+        // 3. Path Editor (Always Visible)
+        _sectionLabel("SUB-VALUE PATH"),
         _buildPathSegmentList(r.location, (newPath) {
           handleUpdate(Reference(r.net, r.group, r.device, newPath));
         }),

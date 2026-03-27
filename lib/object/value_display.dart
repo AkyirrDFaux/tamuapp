@@ -32,34 +32,59 @@ class ValueDisplay extends StatelessWidget {
           style: dataStyle.copyWith(color: Colors.white24, fontStyle: FontStyle.italic));
     }
 
-    // 1. Handle ObjectInfo (New bundled type)
+    // 1. Handle ObjectInfo
     if (type == Types.ObjectInfo && value is ObjectInfo) {
       return _buildObjectInfoSummary(value, theme);
     }
 
-    // 2. Handle Enums / Named Types
+    // 2. Handle PortNumber (New Hardware Type)
+    if (type == Types.PortNumber && value is int) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.settings_input_component, size: 14, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          _buildEnumBadge("PORT $value", theme),
+        ],
+      );
+    }
+
+    // 3. Handle Path (Breadcrumb Style)
+    if (type == Types.Path && (value is Path || value is List<int>)) {
+      final List<int> indices = value is Path ? value.indices : value as List<int>;
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.account_tree_outlined, size: 14, color: Colors.white38),
+          const SizedBox(width: 6),
+          Text(
+            indices.isEmpty ? "Root" : indices.join(" > "),
+            style: dataStyle.copyWith(fontFamily: 'monospace', color: theme.colorScheme.secondary),
+          ),
+        ],
+      );
+    }
+
+    // 4. Handle Enums / Named Types
     if (isInValueEnum(type) && value is int) {
       String name = getValueEnum(type, value) ?? "Unknown ($value)";
       return _buildEnumBadge(name, theme);
     }
 
-    // 3. Special Widget Builders (Colour)
+    // 5. Special Widget Builders (Colour)
     if (type == Types.Colour && value is Colour) {
       return _buildColourRow(value, dataStyle);
     }
 
     if (type == Types.PortType && value is int) {
-      // Get the list of active flag names
       final activeFlags = PortFlags.getActiveFlags(value);
-
-      // Return a standard Text widget with the flags joined by a separator
       return Text(
-        activeFlags.join(", "),
+        activeFlags.isEmpty ? "No Flags" : activeFlags.join(", "),
         style: dataStyle,
       );
     }
 
-    // 4. Standard Text Output
+    // 6. Standard Text Output
     return Text(
       _getFormattedString(),
       style: dataStyle,
@@ -82,6 +107,9 @@ class ValueDisplay extends StatelessWidget {
         if (value is num) return value.toStringAsFixed(2);
         break;
 
+      case Types.Integer:
+        return value.toString();
+
       case Types.Vector2D:
         if (value is Vector2D) return _formatVec2(value);
         break;
@@ -103,21 +131,25 @@ class ValueDisplay extends StatelessWidget {
         }
         break;
 
+      case Types.Text:
+        return value.toString();
+
       default:
         return value.toString();
     }
     return value.toString();
   }
 
-  // --- New Builders ---
+  // --- Builders & Helpers ---
 
   Widget _buildObjectInfoSummary(ObjectInfo info, ThemeData theme) {
     bool isInactive = info.flags.has(Flags.inactive);
     return Wrap(
       spacing: 8,
+      runSpacing: 4,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _buildEnumBadge("Timing: ${info.runTiming}ms", theme),
+        _buildEnumBadge("${info.runTiming}ms", theme),
         if (isInactive)
           _buildEnumBadge("INACTIVE", theme, color: Colors.redAccent),
         Text(
@@ -127,8 +159,6 @@ class ValueDisplay extends StatelessWidget {
       ],
     );
   }
-
-  // --- Formatting Helpers ---
 
   String _formatVec2(Vector2D v) =>
       "X: ${v.X.toStringAsFixed(1)}, Y: ${v.Y.toStringAsFixed(1)}";
@@ -169,7 +199,7 @@ class ValueDisplay extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Text("RGBA(${c.R},${c.G},${c.B},${c.A})", style: baseStyle),
+        Text("RGBA(${c.R}, ${c.G}, ${c.B}, ${c.A})", style: baseStyle),
       ],
     );
   }

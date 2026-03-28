@@ -98,6 +98,11 @@ Map<Types, List<String>> typeToValueNames = {
     "Sequence",
     "All",
   ],
+  Types.Outputs: [
+    "Undefined",
+    "PWM",
+    "Servo",
+  ],
   Types.Operation: [
     "None",
     "Equal",

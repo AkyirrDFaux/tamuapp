@@ -252,7 +252,7 @@ class Message {
       case Types.GeometryOperation:
       case Types.Operation:
       case Types.Program:
-      case Types.LocalFunction:
+      case Types.Outputs:
       case Types.Display:
       case Types.Byte:
       case Types.Type:
@@ -372,7 +372,7 @@ class Message {
       case Types.GeometryOperation:
       case Types.Operation:
       case Types.Program:
-      case Types.LocalFunction:
+      case Types.Outputs:
       case Types.Display:
       case Types.Byte:
       case Types.Type:

@@ -232,6 +232,7 @@ class _ObjectPageState extends State<ObjectPage> {
         }
 
         final entries = object.values.values.toList();
+        // Sort entries by path depth and index for a tree-like view
         entries.sort((a, b) {
           int minLen = min(a.path.indices.length, b.path.indices.length);
           for (int i = 0; i < minLen; i++) {
@@ -289,7 +290,7 @@ class _ObjectPageState extends State<ObjectPage> {
                 _buildInfoSection(
                   icon: Icons.timer_outlined,
                   label: "RUN TIMING",
-                  value: "${object.info.runTiming}",
+                  value: "Every ${object.info.runTiming} loop(s)",
                   theme: theme,
                   onTap: () => _openEditor(context, object.id, object.info.runTiming, Types.Byte),
                 ),
@@ -310,8 +311,8 @@ class _ObjectPageState extends State<ObjectPage> {
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.secondary.withOpacity(0.2),
-                            border: Border(left: BorderSide(color: theme.colorScheme.primary, width: 4)),
+                            color: theme.colorScheme.secondary.withOpacity(0.1),
+                            border: Border(left: BorderSide(color: theme.colorScheme.primary.withOpacity(0.5), width: 4)),
                           ),
                           child: Row(
                             children: [
@@ -326,17 +327,35 @@ class _ObjectPageState extends State<ObjectPage> {
                                   ],
                                 ),
                               ),
+                              // --- NAVIGATION LOGIC ---
                               if (!isEditMode && entry.type == Types.Reference && entry.data is Reference)
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_forward, size: 20),
-                                  onPressed: () {
-                                    final target = objectManager.getObjectByRef(entry.data as Reference);
-                                    if (target != null) {
-                                      _stopTimer(); // CRITICAL: Stop refreshing before navigating away
-                                      Navigator.push(context, MaterialPageRoute(builder: (c) => ObjectPage(object: target)));
-                                    }
-                                  },
-                                ),
+                                Builder(builder: (context) {
+                                  final ref = entry.data as Reference;
+                                  // Only show navigation for GLOBAL references
+                                  if (ref.isGlobal) {
+                                    return IconButton(
+                                      icon: const Icon(Icons.arrow_forward, size: 20, color: Colors.cyanAccent),
+                                      onPressed: () {
+                                        final rootTargetRef = Reference(ref.net, ref.group, ref.device, Path([]));
+                                        final target = objectManager.getObjectByRef(rootTargetRef);
+                                        if (target != null) {
+                                          _stopTimer();
+                                          Navigator.push(context, MaterialPageRoute(builder: (c) => ObjectPage(object: target)));
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text("Object ${rootTargetRef.fullAddress} not found"))
+                                          );
+                                        }
+                                      },
+                                    );
+                                  } else {
+                                    // Local reference: show a non-navigating hint icon
+                                    return const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                    );
+                                  }
+                                }),
+
                               if (isEditMode && !hasChildren)
                                 IconButton(
                                   icon: const Icon(Icons.subdirectory_arrow_right, size: 18, color: Colors.white38),
@@ -347,6 +366,7 @@ class _ObjectPageState extends State<ObjectPage> {
                         ),
                       ),
                     ),
+                    // Logic for adding siblings when depth decreases
                     if (isEditMode && nextDepth < depth)
                       ...List.generate(depth - nextDepth, (i) {
                         int targetDepth = depth - i;

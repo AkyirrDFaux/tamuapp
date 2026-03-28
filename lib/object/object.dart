@@ -5,55 +5,110 @@ import '../types.dart';
 
 class Path {
   final List<int> indices;
-  final String pathString;
 
-  Path([List<int>? input])
-      : indices = List<int>.unmodifiable(input ?? []),
-        pathString = (input ?? []).join('.');
+  Path([List<int>? input]) : indices = List<int>.unmodifiable(input ?? []);
 
   int get length => indices.length;
+  String get pathString => indices.join('.');
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-          (other is Path && pathString == other.pathString);
+          (other is Path && _listEquals(indices, other.indices));
 
   @override
-  int get hashCode => pathString.hashCode;
+  int get hashCode => Object.hashAll(indices);
 
   @override
-  String toString() => pathString.isEmpty ? "Root" : pathString;
+  String toString() => indices.isEmpty ? "Root" : pathString;
+
+  static bool _listEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
+    return true;
+  }
 }
 
 class Reference {
+  final bool isGlobal;
   final int net;
   final int group;
   final int device;
   final Path location;
-
-  // Caching the full string for fast Map lookups and comparison
   final String fullAddress;
 
-  Reference(this.net, this.group, this.device, [Path? path])
-      : location = path ?? Path(),
-        fullAddress = "$net.$group.$device${(path != null && path.indices.isNotEmpty) ? '.${path.pathString}' : ''}";
+  /// Internal constructor to centralize logic and string caching
+  Reference._internal({
+    required this.isGlobal,
+    required this.net,
+    required this.group,
+    required this.device,
+    required this.location,
+  }) : fullAddress = isGlobal
+      ? "$net.$group.$device${location.indices.isNotEmpty ? '.${location.pathString}' : ''}"
+      : "L${location.indices.isNotEmpty ? '.${location.pathString}' : ''}";
 
-  /// Constructor to build from a raw list of bytes [Net, Group, Device, ...Path...]
-  factory Reference.fromList(List<int> values) {
-    if (values.length < 3) return Reference(0, 0, 0);
+  /// Global Constructor (Implicitly Global)
+  /// Usage: Reference(0, 1, 10, Path([1, 2]))
+  Reference(int net, int group, int device, [Path? path])
+      : this._internal(
+    isGlobal: true,
+    net: net,
+    group: group,
+    device: device,
+    location: path ?? Path(),
+  );
 
-    final net = values[0];
-    final group = values[1];
-    final device = values[2];
+  /// Local Constructor (Explicitly Local)
+  /// Usage: Reference.local(Path([1, 2]))
+  Reference.local([Path? path])
+      : this._internal(
+    isGlobal: false,
+    net: 0,
+    group: 0,
+    device: 0,
+    location: path ?? Path(),
+  );
 
-    // Anything after index 2 is the local Path
-    final pathSegments = values.sublist(3);
-    return Reference(net, group, device, Path(pathSegments));
+  /// Empty/Invalid Reference
+  factory Reference.empty() => Reference.local();
+
+  int get metadata => (isGlobal ? 0x80 : 0x00) | (location.length & 0x7F);
+
+  factory Reference.fromList(List<int> bytes) {
+    if (bytes.isEmpty) return Reference.local();
+
+    final meta = bytes[0];
+    final isGlobal = (meta & 0x80) != 0;
+    final pathLen = meta & 0x7F;
+
+    final n = bytes.length > 1 ? bytes[1] : 0;
+    final g = bytes.length > 2 ? bytes[2] : 0;
+    final d = bytes.length > 3 ? bytes[3] : 0;
+
+    List<int> pathSegments = [];
+    if (bytes.length > 4) {
+      final end = 4 + pathLen;
+      pathSegments = bytes.sublist(4, end > bytes.length ? bytes.length : end);
+    }
+
+    return Reference._internal(
+      isGlobal: isGlobal,
+      net: n,
+      group: g,
+      device: d,
+      location: Path(pathSegments),
+    );
   }
 
-  /// Helper to get the raw byte representation for sending to MCU
   List<int> toBytes() {
-    return [net, group, device, ...location.indices];
+    return [
+      metadata,
+      net,
+      group,
+      device,
+      ...location.indices,
+    ];
   }
 
   @override
@@ -66,16 +121,6 @@ class Reference {
 
   @override
   String toString() => fullAddress;
-}
-
-// Extension to help with list comparison (requires no extra packages)
-extension IterableExtension<T> on Iterable<T> {
-  bool all(bool Function(T element) test) {
-    for (T element in this) {
-      if (!test(element)) return false;
-    }
-    return true;
-  }
 }
 
 class ValueEntry {

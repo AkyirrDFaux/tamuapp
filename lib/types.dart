@@ -36,8 +36,7 @@ enum Types {
   Coord3D(32),
   Text(33),
   Reference(34),
-  Path(35),
-  Message(36);
+  Message(35);
 
   final int value;
   const Types(this.value);
@@ -86,7 +85,6 @@ final Map<Types, IconData> typeIcons = {
   Types.Coord3D: Icons.threed_rotation,
   Types.Text: Icons.title_outlined,
   Types.Reference: Icons.tag_outlined,
-  Types.Path: Icons.reorder, // Icon for Path
   Types.Message: Icons.email,
 };
 

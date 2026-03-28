@@ -81,7 +81,6 @@ class _ValueEditorState extends State<ValueEditor> {
       case Types.Coord2D:   return Coord2D(Vector2D(0, 0), Vector2D(1, 0));
       case Types.Coord3D:   return Coord3D(Vector3D(0, 0, 0), Vector3D(1, 0, 0));
       case Types.Reference: return Reference(0, 0, 0, Path([]));
-      case Types.Path:      return Path([]);
       default:              return null;
     }
   }
@@ -268,10 +267,6 @@ class _ValueEditorState extends State<ValueEditor> {
       case Types.Reference:
         final r = currentValue as Reference? ?? Reference(0, 0, 0, Path([]));
         return _buildReferenceEditor(r, (newRef) => _updateValue(newRef));
-
-      case Types.Path: // Assuming Path is in your Types enum
-        final p = currentValue as Path? ?? Path([]);
-        return _buildStandalonePathEditor(p, (newPath) => _updateValue(newPath));
 
       default:
         return Center(
@@ -551,46 +546,45 @@ class _ValueEditorState extends State<ValueEditor> {
     final theme = Theme.of(context);
     final List<NodeObject> availableObjects = ObjectManager().objects;
 
-    void handleUpdate(Reference next) {
-      onUpdate(next);
-    }
+    // Use isGlobal from the actual reference to set initial toggle state
+    // only if we haven't manually toggled it in this session yet.
+    _refEditMode = r.isGlobal ? 0 : 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. Mode Switcher (Slider-style toggle)
+        _sectionLabel("REFERENCE TYPE"),
         Center(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black26,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ToggleButtons(
-              isSelected: [_refEditMode == 0, _refEditMode == 1],
-              onPressed: (index) => setState(() => _refEditMode = index),
-              borderRadius: BorderRadius.circular(8),
-              constraints: const BoxConstraints(minHeight: 32, minWidth: 120),
-              selectedColor: theme.colorScheme.onPrimary,
-              fillColor: theme.colorScheme.primary.withOpacity(0.8),
-              children: const [
-                Text("LINK OBJECT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                Text("MANUAL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-              ],
-            ),
+          child: ToggleButtons(
+            isSelected: [_refEditMode == 0, _refEditMode == 1],
+            onPressed: (index) {
+              setState(() {
+                _refEditMode = index;
+                // Transition between Global and Local
+                if (index == 0) {
+                  onUpdate(Reference(0, 0, 0, r.location)); // Switch to Global
+                } else {
+                  onUpdate(Reference.local(r.location));    // Switch to Local
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(8),
+            constraints: const BoxConstraints(minHeight: 32, minWidth: 120),
+            selectedColor: theme.colorScheme.onPrimary,
+            fillColor: _refEditMode == 0 ? theme.colorScheme.tertiary : theme.colorScheme.primary,
+            children: const [
+              Text("GLOBAL LINK", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+              Text("LOCAL PATH", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+            ],
           ),
         ),
         const SizedBox(height: 16),
 
-        // 2. Dynamic Input Area (Switches based on mode)
-        SizedBox(
-          height: 60, // Keep height consistent to prevent jumping
-          child: _refEditMode == 0
-              ? DropdownButtonFormField<String>(
-            decoration: const InputDecoration(
-              labelText: "Select Object",
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
+        // 2. Address Input (Only for Global)
+        if (_refEditMode == 0) ...[
+          _sectionLabel("TARGET OBJECT (NET.GP.DEV)"),
+          DropdownButtonFormField<String>(
+            decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
             value: availableObjects.any((obj) =>
             obj.id.net == r.net && obj.id.group == r.group && obj.id.device == r.device)
                 ? "${r.net}.${r.group}.${r.device}"
@@ -605,42 +599,55 @@ class _ValueEditorState extends State<ValueEditor> {
             onChanged: (addr) {
               if (addr != null) {
                 final p = addr.split('.').map(int.parse).toList();
-                handleUpdate(Reference(p[0], p[1], p[2], r.location));
+                onUpdate(Reference(p[0], p[1], p[2], r.location));
               }
             },
-          )
-              : Row(
+          ),
+          const SizedBox(height: 8),
+          Row(
             children: [
-              Expanded(child: _buildByteField("NET", r.net, (v) => handleUpdate(Reference(v, r.group, r.device, r.location)))),
+              Expanded(child: _buildByteField("NET", r.net, (v) => onUpdate(Reference(v, r.group, r.device, r.location)))),
               const SizedBox(width: 8),
-              Expanded(child: _buildByteField("GP", r.group, (v) => handleUpdate(Reference(r.net, v, r.device, r.location)))),
+              Expanded(child: _buildByteField("GP", r.group, (v) => onUpdate(Reference(r.net, v, r.device, r.location)))),
               const SizedBox(width: 8),
-              Expanded(child: _buildByteField("DEV", r.device, (v) => handleUpdate(Reference(r.net, r.group, v, r.location)))),
+              Expanded(child: _buildByteField("DEV", r.device, (v) => onUpdate(Reference(r.net, r.group, v, r.location)))),
             ],
           ),
-        ),
+        ] else ...[
+          // Local Mode visual feedback
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(4)),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: Colors.white38),
+                SizedBox(width: 8),
+                Text("Pointing to a relative path in this device.", style: TextStyle(fontSize: 11, color: Colors.white38)),
+              ],
+            ),
+          ),
+        ],
 
         const Divider(height: 32, color: Colors.white10),
 
-        // 3. Path Editor (Always Visible)
+        // 3. Sub-Path Editor
         _sectionLabel("SUB-VALUE PATH"),
         _buildPathSegmentList(r.location, (newPath) {
-          handleUpdate(Reference(r.net, r.group, r.device, newPath));
+          if (r.isGlobal) {
+            onUpdate(Reference(r.net, r.group, r.device, newPath));
+          } else {
+            onUpdate(Reference.local(newPath));
+          }
         }),
-      ],
-    );
-  }
 
-  Widget _buildStandalonePathEditor(Path p, Function(Path) onUpdate) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _sectionLabel("PATH SEGMENTS (INDICES)"),
-        _buildPathSegmentList(p, (nextPath) {
-          debugPrint("DEBUG UI (Standalone Path): ${nextPath.indices}");
-          onUpdate(nextPath);
-        }),
+        // Visual Preview of the full address string
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Text(
+            "RESULT: ${r.fullAddress}",
+            style: TextStyle(fontFamily: 'monospace', fontSize: 10, color: theme.colorScheme.secondary.withOpacity(0.5)),
+          ),
+        ),
       ],
     );
   }

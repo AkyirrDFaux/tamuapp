@@ -228,7 +228,10 @@ class Message {
         return Uint8List.fromList(utf8.encode(str));
 
       case Types.Reference:
-        if (data is Reference) return Uint8List.fromList(data.toBytes());
+        if (data is Reference) {
+          // ALIGNMENT: Use the proportional toBytes() which is PathLen + 4
+          return Uint8List.fromList(data.toBytes());
+        }
         if (data is List<int>) return Uint8List.fromList(data);
         return Uint8List(0);
 
@@ -398,7 +401,7 @@ class Message {
         dataStr = data.toString().split('.').last;
       } else if (data is Reference) {
         // Use the fullAddress we built earlier (Net.Group.Device.Path)
-        dataStr = "Ref(${data.fullAddress})";
+        dataStr = data.isGlobal ? "Global(${data.fullAddress})" : "Local(${data.location})";
       } else if (data.runtimeType.toString().contains('Text')) {
         // Handles your custom Text class safely
         dataStr = '"${data.Data}"';

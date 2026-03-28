@@ -32,12 +32,17 @@ class ValueDisplay extends StatelessWidget {
           style: dataStyle.copyWith(color: Colors.white24, fontStyle: FontStyle.italic));
     }
 
-    // 1. Handle ObjectInfo
+    // 1. Handle Reference (The new Global/Local logic)
+    if (type == Types.Reference && value is Reference) {
+      return _buildReferenceBadge(value, theme);
+    }
+
+    // 3. Handle ObjectInfo
     if (type == Types.ObjectInfo && value is ObjectInfo) {
       return _buildObjectInfoSummary(value, theme);
     }
 
-    // 2. Handle PortNumber (New Hardware Type)
+    // 4. Handle PortNumber
     if (type == Types.PortNumber && value is int) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -49,33 +54,18 @@ class ValueDisplay extends StatelessWidget {
       );
     }
 
-    // 3. Handle Path (Breadcrumb Style)
-    if (type == Types.Path && (value is Path || value is List<int>)) {
-      final List<int> indices = value is Path ? value.indices : value as List<int>;
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.account_tree_outlined, size: 14, color: Colors.white38),
-          const SizedBox(width: 6),
-          Text(
-            indices.isEmpty ? "Root" : indices.join(" > "),
-            style: dataStyle.copyWith(fontFamily: 'monospace', color: theme.colorScheme.secondary),
-          ),
-        ],
-      );
-    }
-
-    // 4. Handle Enums / Named Types
+    // 5. Handle Enums / Named Types
     if (isInValueEnum(type) && value is int) {
       String name = getValueEnum(type, value) ?? "Unknown ($value)";
       return _buildEnumBadge(name, theme);
     }
 
-    // 5. Special Widget Builders (Colour)
+    // 6. Handle Colour
     if (type == Types.Colour && value is Colour) {
       return _buildColourRow(value, dataStyle);
     }
 
+    // 7. Handle PortType Flags
     if (type == Types.PortType && value is int) {
       final activeFlags = PortFlags.getActiveFlags(value);
       return Text(
@@ -84,7 +74,6 @@ class ValueDisplay extends StatelessWidget {
       );
     }
 
-    // 6. Standard Text Output
     return Text(
       _getFormattedString(),
       style: dataStyle,
@@ -99,41 +88,32 @@ class ValueDisplay extends StatelessWidget {
           return "$value (0x$hex)";
         }
         break;
-
       case Types.Bool:
         return (value == true || value == 1) ? "True" : "False";
-
       case Types.Number:
         if (value is num) return value.toStringAsFixed(2);
         break;
-
       case Types.Integer:
         return value.toString();
-
       case Types.Vector2D:
         if (value is Vector2D) return _formatVec2(value);
         break;
-
       case Types.Vector3D:
         if (value is Vector3D) return _formatVec3(value);
         break;
-
       case Types.Coord2D:
         if (value is Coord2D) {
           final angle = atan2(value.Rotation.Y, value.Rotation.X) * 180 / pi;
-          return "${_formatVec2(value.Position)}, Angle: ${angle.toStringAsFixed(1)}°";
+          return "${_formatVec2(value.Position)}, ${angle.toStringAsFixed(1)}°";
         }
         break;
-
       case Types.Coord3D:
         if (value is Coord3D) {
-          return "Pos: [${_formatVec3(value.Position)}], Rot: [${_formatVec3(value.Rotation)}]";
+          return "P: [${_formatVec3(value.Position)}], R: [${_formatVec3(value.Rotation)}]";
         }
         break;
-
       case Types.Text:
         return value.toString();
-
       default:
         return value.toString();
     }
@@ -200,6 +180,47 @@ class ValueDisplay extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text("RGBA(${c.R}, ${c.G}, ${c.B}, ${c.A})", style: baseStyle),
+      ],
+    );
+  }
+
+  Widget _buildReferenceBadge(Reference ref, ThemeData theme) {
+    final bool isGlobal = ref.isGlobal;
+
+    // Explicit vivid colors to avoid the "grayed out" theme defaults
+    final Color globalColor = Colors.cyanAccent;
+    final Color localColor = Colors.orangeAccent;
+
+    final Color activeColor = isGlobal ? globalColor : localColor;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          isGlobal ? Icons.public : Icons.shortcut,
+          size: 14,
+          color: activeColor,
+        ),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            // Increased opacity (0.15) for better visibility against dark backgrounds
+            color: activeColor.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: activeColor.withOpacity(0.3), width: 1),
+          ),
+          child: Text(
+            ref.fullAddress,
+            style: TextStyle(
+              color: activeColor,
+              fontSize: 13,
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
       ],
     );
   }

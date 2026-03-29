@@ -104,30 +104,46 @@ Map<Types, List<String>> typeToValueNames = {
     "Servo",
   ],
   Types.Operation: [
-    "None",
-    "Equal",
-    "Extract",
-    "Combine",
-    "IsEqual",
-    "IsGreater",
-    "IsSmaller",
-    "Add",
-    "Subtract",
-    "Multiply",
-    "Divide",
-    "Power",
-    "Absolute",
-    "Rotate",
-    "RandomBetween",
-    "MoveTo",
-    "Delay",
-    "AddDelay",
-    "IfSwitch",
-    "While",
-    "SetFlags",    // Updated from SetActivity
-    "ResetFlags",  // Added
-    "Sine"         // Added
-  ],
+    "None",             // 0
+    "Equal",            // 1
+    "Combine",          // 2
+    "IsEqual",          // 3
+    "IsGreater",        // 4
+    "IsSmaller",        // 5
+    "Add",              // 6
+    "Subtract",         // 7
+    "Multiply",         // 8
+    "Divide",           // 9
+    "Power",            // 10
+    "Absolute",         // 11
+    "Min",              // 12
+    "Max",              // 13
+    "Modulo",           // 14
+    "Sine",             // 15
+    "Square",           // 16
+    "Sawtooth",         // 17
+    "Magnitude",        // 18
+    "Angle",            // 19
+    "Normalize",        // 20
+    "DotProduct",       // 21
+    "CrossProduct",     // 22
+    "Map",              // 23
+    "Clamp",            // 24
+    "Deadzone",         // 25
+    "LinInterpolation", // 26
+    "And",              // 27
+    "Or",               // 28
+    "Not",              // 29
+    "Edge",             // 30
+    "SetReset",         // 31
+    "Random",           // 32
+    "Delay",            // 33
+    "AddDelay",         // 34
+    "IfSwitch",         // 35
+    "While",            // 36
+    "SetFlags",         // 37
+    "ResetFlags",       // 38
+  ]
 };
 
 String? getValueEnum(Types type, int index) {

@@ -246,37 +246,40 @@ class BluetoothManager extends ChangeNotifier {
 
   void _onUartDataReceived(Uint8List value) {
     if (Platform.isAndroid) return;
+    print('RAW UART IN <<<: ${toHexLog(value)}');
     _rawBuffer.addAll(value);
 
+    // We need at least 4 bytes to check Header(1) + CRC(1) + Len(1) + Tail(1)
+    // But a full packet is 64.
     while (_rawBuffer.length >= 64) {
       if (_rawBuffer[0] == 0xFA) {
         int receivedCrc = _rawBuffer[1];
         int dataLen = _rawBuffer[2];
 
+        // Boundary check for dataLen
         if (dataLen <= 60) {
-          // 1. Verify CRC (Calculated over Len + Data)
+          int footerIdx = 3 + dataLen;
+
+          // Check if CRC matches AND Footer exists
           int calculatedCrc = _calculateCrc8(_rawBuffer.sublist(2, 3 + dataLen));
 
-          if (receivedCrc == calculatedCrc) {
-            // 2. Verify Footer
-            int footerIdx = 3 + dataLen;
-            if (_rawBuffer[footerIdx] == 0xBF) {
+          if (receivedCrc == calculatedCrc && _rawBuffer[footerIdx] == 0xBF) {
+            // SUCCESS: Extract payload
+            final payload = Uint8List.fromList(_rawBuffer.sublist(3, 3 + dataLen));
+            _handleReceivedData(payload);
 
-              // SUCCESS
-              final payload = Uint8List.fromList(_rawBuffer.sublist(3, 3 + dataLen));
-              _handleReceivedData(payload);
-
-            } else {
-              print("Corruption: Footer BF missing at $footerIdx");
-            }
-          } else {
-            print("Corruption: CRC Mismatch (Expected $receivedCrc, got $calculatedCrc)");
+            // Remove exactly one packet frame and continue loop
+            _rawBuffer.removeRange(0, 64);
+            continue;
           }
         }
-
-        _rawBuffer.removeRange(0, 64);
+        // If we got here, 0xFA was found but validation failed.
+        // It might be a fake header inside data. Pop one byte and keep hunting.
+        print("Invalid Packet at 0xFA: Sliding sync...");
+        _rawBuffer.removeAt(0);
       } else {
-        _rawBuffer.removeAt(0); // Sync hunt
+        // Not a header, toss it and keep looking
+        _rawBuffer.removeAt(0);
       }
     }
   }
@@ -349,6 +352,10 @@ class BluetoothManager extends ChangeNotifier {
       } else if (_connectionType == ConnectionType.uart) {
         if (Platform.isAndroid || _serialPort == null || !_serialPort!.isOpen) return;
 
+        //Wakeup
+        _serialPort!.write(Uint8List.fromList([0xFF, 0xFF, 0xFF, 0xFF]));
+        await Future.delayed(const Duration(milliseconds: 5));
+
         const int maxData = 60;
         int offset = 0;
 
@@ -368,6 +375,7 @@ class BluetoothManager extends ChangeNotifier {
           packet[1] = _calculateCrc8(packet.sublist(2, 3 + toCopy));
 
           _serialPort!.write(packet);
+          await Future.delayed(const Duration(milliseconds: 2));
           offset += toCopy;
         }
       }
@@ -383,19 +391,24 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   void disconnect() {
+    _rawBuffer.clear();
+    _receivedData = Uint8List(0); // Clear the reconstructed message buffer too
+
     if (_isConnected) {
-       if (_connectionType == ConnectionType.ble && _bleDevice != null) {
+      if (_connectionType == ConnectionType.ble && _bleDevice != null) {
         UniversalBle.disconnect(_bleDevice!.deviceId);
       } else if (_connectionType == ConnectionType.uart && _serialPort != null) {
         if (Platform.isAndroid) return;
         _serialPortSubscription?.cancel();
+        _serialPort?.flush(); // Clear hardware buffers
         _serialPort?.close();
         _serialPort = null;
         _serialPortSubscription = null;
-        _isConnected = false;
-        notifyListeners();
       }
     }
+    _isConnected = false;
+    _isConnecting = false;
+    notifyListeners();
   }
 
   void setSelectedDevice(dynamic device) {

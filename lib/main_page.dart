@@ -95,7 +95,25 @@ class _MainPage extends State<MainPage> {
                       Color currentButtonColor = theme.colorScheme.secondary;
                       Color currentContentColor = Colors.white;
 
-                      final deviceName = manager.selectedDevice?.name ?? "Device";
+                      // --- FIX STARTS HERE ---
+                      String deviceName;
+                      final selected = manager.selectedDevice;
+
+                      if (selected == null) {
+                        deviceName = "Device";
+                      } else if (selected is String) {
+                        // If it's a String (UART COM Port), use the string itself
+                        deviceName = selected;
+                      } else {
+                        // If it's a Bluetooth device object, try to get .name
+                        // Use 'try-catch' or 'as dynamic' if the types are messy
+                        try {
+                          deviceName = (selected as dynamic).name ?? "Unknown Device";
+                        } catch (e) {
+                          deviceName = selected.toString();
+                        }
+                      }
+                      // --- FIX ENDS HERE ---
 
                       if (manager.selectedDevice == null) {
                         buttonText = 'Explore\nDevices';

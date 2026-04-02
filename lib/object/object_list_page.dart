@@ -198,29 +198,60 @@ class _ObjectListPageState extends State<ObjectListPage> {
   }
 
   Widget _buildProgramControls(NodeObject object) {
-    bool isRunning = object.info.flags.has(Flags.runOnce) || object.info.flags.has(Flags.runOnStartup);
+    // Check if the program is currently active in any running state
+    final bool isRunningOnce = object.info.flags.has(Flags.runOnce);
+    final bool isRunningLoop = object.info.flags.has(Flags.runLoop);
+    final bool isAnyRunning = isRunningOnce || isRunningLoop;
 
-    return IconButton(
-      icon: Icon(isRunning ? Icons.stop_circle_outlined : Icons.play_circle_outline),
-      color: isRunning ? Colors.redAccent : Colors.greenAccent,
-      onPressed: () {
-        final newFlags = FlagClass(object.info.flags.value);
-        if (isRunning) {
+    if (isAnyRunning) {
+      // Show a single Stop button if any execution is active
+      return IconButton(
+        icon: const Icon(Icons.stop_circle_outlined),
+        color: Colors.redAccent,
+        tooltip: "Stop Program",
+        onPressed: () {
+          final newFlags = FlagClass(object.info.flags.value);
           newFlags.remove(Flags.runOnce);
-          newFlags.remove(Flags.runOnStartup);
-        } else {
-          newFlags.add(Flags.runOnce);
-        }
-        _sendInfoUpdate(object, newFlags);
-      },
+          newFlags.remove(Flags.runLoop);
+          _sendInfoUpdate(object, newFlags);
+        },
+      );
+    }
+
+    // Show two distinct play buttons if idle
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.looks_one_outlined),
+          color: Colors.blueAccent,
+          tooltip: "Run Once",
+          onPressed: () {
+            final newFlags = FlagClass(object.info.flags.value);
+            newFlags.add(Flags.runOnce);
+            _sendInfoUpdate(object, newFlags);
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.cached_outlined),
+          color: Colors.greenAccent,
+          tooltip: "Run Loop",
+          onPressed: () {
+            final newFlags = FlagClass(object.info.flags.value);
+            newFlags.add(Flags.runLoop);
+            _sendInfoUpdate(object, newFlags);
+          },
+        ),
+      ],
     );
   }
 
   void _sendInfoUpdate(NodeObject object, FlagClass newFlags) {
-    // UPDATED: Now uses ObjectInfo to ensure atomic update on MCU
+    // Atomic update including the existing period and phase
     final newInfo = ObjectInfo(
       flags: newFlags,
-      runTiming: object.info.runTiming,
+      runPeriod: object.info.runPeriod,
+      runPhase: object.info.runPhase, // Added phase support
     );
     ObjectManager().writeInfo(object.id, newInfo);
   }

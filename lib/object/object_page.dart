@@ -15,18 +15,21 @@ class FlagsIconRow extends StatelessWidget {
   const FlagsIconRow({super.key, required this.object});
 
   void _toggleFlag(BuildContext context, Flags flag) {
-    // 1. Double-check protection: Never modify Auto
+    // Protection: Never manually modify Auto or Inactive via standard toggle if logic requires it
     if (flag == Flags.auto) return;
 
+    // Create a new FlagClass with the toggled bit
+    final updatedFlags = FlagClass(object.info.flags.value ^ flag.value);
+
     final newInfo = ObjectInfo(
-      flags: FlagClass(object.info.flags.value ^ flag.value),
-      runTiming: object.info.runTiming,
+      flags: updatedFlags,
+      runPeriod: object.info.runPeriod,
+      runPhase: object.info.runPhase,
     );
 
     ObjectManager().writeInfo(object.id, newInfo);
   }
 
-  /// Builds a standard interactive IconButton for user-managed flags
   Widget _buildInteractiveFlagButton(BuildContext context, {required Flags flag, required IconData icon, required String tooltip}) {
     final theme = Theme.of(context);
     final bool isActive = object.info.flags.has(flag);
@@ -43,36 +46,20 @@ class FlagsIconRow extends StatelessWidget {
     );
   }
 
-  /// Builds a non-interactive, read-only indicator for MCU-managed flags
   Widget _buildReadOnlyFlagIndicator(BuildContext context, {required Flags flag, required IconData icon, required String tooltip}) {
     final theme = Theme.of(context);
     final bool isActive = object.info.flags.has(flag);
-
-    // 2. Visual Priority: Auto flag uses Amber when active to show system control
     final Color activeColor = Colors.amber;
-    final Color iconColor = isActive ? activeColor : theme.disabledColor;
 
-    // InkWell with no callbacks provides the tooltip and visual bounds
-    // without standard button interaction or dimming.
-    return InkWell(
-      onTap: null, // Disabled
-      mouseCursor: SystemMouseCursors.basic, // Show it's not a button
-      child: Tooltip(
-        message: '$tooltip (Read-Only)',
-        child: Container(
-          // Match standard IconButton sizing/padding
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            // 3. Keep background highlight if active
-            color: isActive ? activeColor.withOpacity(0.1) : null,
-            borderRadius: BorderRadius.circular(20), // Circular background
-          ),
-          child: Icon(
-            icon,
-            color: iconColor, // 4. Lit up with bright amber if active
-            size: 24, // Standard IconButton icon size
-          ),
+    return Tooltip(
+      message: '$tooltip (System)',
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isActive ? activeColor.withOpacity(0.1) : null,
+          borderRadius: BorderRadius.circular(20),
         ),
+        child: Icon(icon, color: isActive ? activeColor : theme.disabledColor, size: 24),
       ),
     );
   }
@@ -85,12 +72,11 @@ class FlagsIconRow extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(8)),
       child: Wrap(
         spacing: 4.0, runSpacing: 4.0,
-        crossAxisAlignment: WrapCrossAlignment.center, // Align icons vertically
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          // Auto uses the Special Read-Only Indicator
           _buildReadOnlyFlagIndicator(context, flag: Flags.auto, icon: Icons.hdr_auto_outlined, tooltip: 'Auto-Generated'),
 
-          // User Flags use the standard Interactive Buttons
+          _buildInteractiveFlagButton(context, flag: Flags.runLoop, icon: Icons.sync, tooltip: 'Run Loop'),
           _buildInteractiveFlagButton(context, flag: Flags.runOnce, icon: Icons.looks_one_outlined, tooltip: 'Run Once'),
           _buildInteractiveFlagButton(context, flag: Flags.runOnStartup, icon: Icons.power_settings_new_outlined, tooltip: 'Run on Startup'),
           _buildInteractiveFlagButton(context, flag: Flags.inactive, icon: Icons.pause_circle_outline, tooltip: 'Inactive/Disabled'),
@@ -287,12 +273,54 @@ class _ObjectPageState extends State<ObjectPage> {
                 _buildInfoSection(icon: Icons.fingerprint, label: "ADDRESS", value: object.id.toString(), theme: theme),
                 const Text("FLAGS & STATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white38)),
                 FlagsIconRow(object: object),
-                _buildInfoSection(
-                  icon: Icons.timer_outlined,
-                  label: "RUN TIMING",
-                  value: "Every ${object.info.runTiming} loop(s)",
-                  theme: theme,
-                  onTap: () => _openEditor(context, object.id, object.info.runTiming, Types.Byte),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildInfoSection(
+                        icon: Icons.timer_outlined,
+                        label: "PERIOD (STRIDE)",
+                        value: "${object.info.runPeriod} loops",
+                        theme: theme,
+                        onTap: () => ValueEditor.show(
+                          context,
+                          object.id,
+                          object.info.runPeriod,
+                          Types.Byte,
+                              (newType, newVal) {
+                            final newInfo = ObjectInfo(
+                              flags: object.info.flags,
+                              runPeriod: (newVal as num).toInt(),
+                              runPhase: object.info.runPhase,
+                            );
+                            ObjectManager().writeInfo(object.id, newInfo);
+                          },
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildInfoSection(
+                        icon: Icons.shutter_speed_outlined,
+                        label: "PHASE (OFFSET)",
+                        value: "Offset: ${object.info.runPhase}",
+                        theme: theme,
+                        onTap: () => ValueEditor.show(
+                          context,
+                          object.id,
+                          object.info.runPhase,
+                          Types.Byte,
+                              (newType, newVal) {
+                            final newInfo = ObjectInfo(
+                              flags: object.info.flags,
+                              runPeriod: object.info.runPeriod,
+                              runPhase: (newVal as num).toInt(),
+                            );
+                            ObjectManager().writeInfo(object.id, newInfo);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const Divider(height: 32),
 

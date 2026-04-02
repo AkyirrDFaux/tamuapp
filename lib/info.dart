@@ -4,7 +4,7 @@ enum Flags {
   undefined1(2),    // 0b00000010
   undefined2(4),    // 0b00000100
   undefined3(8),    // 0b00001000
-  undefined4(16),   // 0b00010000
+  runLoop(16),      // 0b00010000
   runOnce(32),      // 0b00100000
   runOnStartup(64), // 0b01000000
   inactive(128);    // 0b10000000
@@ -48,15 +48,17 @@ class FlagClass {
 
 class ObjectInfo {
   FlagClass flags;
-  int runTiming;
+  int runPeriod;
+  int runPhase;
 
   ObjectInfo({
     FlagClass? flags,
-    this.runTiming = 0,
+    this.runPeriod = 0,
+    this.runPhase = 0,
   }) : flags = flags ?? FlagClass();
 
   @override
   String toString() {
-    return "Timing: ${runTiming}ms, Flags: $flags";
+    return "Period: ${runPeriod}, Phase: ${runPhase}, Flags: $flags";
   }
 }

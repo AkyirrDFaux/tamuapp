@@ -142,7 +142,7 @@ class ObjectManager extends ChangeNotifier {
     // 3. Metadata - UPDATED: Now expects ObjectInfo instead of just FlagClass
     if (entries[3].data is ObjectInfo) {
       targetObject.info.flags.value = (entries[3].data as ObjectInfo).flags.value;
-      targetObject.info.runTiming = (entries[3].data as ObjectInfo).runTiming;
+      targetObject.info.runPeriod = (entries[3].data as ObjectInfo).runPeriod;
     }
 
     if (entries[4].data is String) {
@@ -205,7 +205,8 @@ class ObjectManager extends ChangeNotifier {
     if (targetObject != null && entries[2].data is ObjectInfo) {
       final ObjectInfo newInfo = entries[2].data as ObjectInfo;
       targetObject.info.flags.value = newInfo.flags.value;
-      targetObject.info.runTiming = newInfo.runTiming;
+      targetObject.info.runPeriod = newInfo.runPeriod;
+      targetObject.info.runPhase = newInfo.runPhase;
       notifyListeners();
     }
   }

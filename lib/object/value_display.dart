@@ -129,7 +129,7 @@ class ValueDisplay extends StatelessWidget {
       runSpacing: 4,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _buildEnumBadge("${info.runTiming}ms", theme),
+        _buildEnumBadge("${info.runPeriod}ms", theme),
         if (isInactive)
           _buildEnumBadge("INACTIVE", theme, color: Colors.redAccent),
         Text(

@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'dart:convert';
 
-import '../values.dart';
 import '../functions.dart';
 import '../info.dart';
 import '../object/object.dart';
@@ -153,7 +152,7 @@ class Message {
       case Types.ObjectInfo:
         if (data is ObjectInfo) {
           // [FlagByte, TimingByte]
-          return Uint8List.fromList([data.flags.value & 0xFF, data.runTiming & 0xFF]);
+          return Uint8List.fromList([data.flags.value & 0xFF, data.runPeriod & 0xFF, data.runPhase & 0xFF]);
         }
         return Uint8List(2);
 
@@ -305,7 +304,8 @@ class Message {
         if (raw.length < 2) return ObjectInfo();
         return ObjectInfo(
           flags: FlagClass(raw[0]),
-          runTiming: raw[1],
+          runPeriod: raw[1],
+          runPhase: raw[2]
         );
 
       case Types.Bool:

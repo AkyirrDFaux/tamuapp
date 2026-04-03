@@ -3,10 +3,12 @@ import 'dart:collection';
 import '../info.dart';
 import '../types.dart';
 
-class Path {
-  final List<int> indices;
+import 'dart:typed_data';
 
-  Path([List<int>? input]) : indices = List<int>.unmodifiable(input ?? []);
+class Path {
+  final Uint8List indices;
+
+  Path([List<int>? input]) : indices = Uint8List.fromList(input ?? []);
 
   int get length => indices.length;
   String get pathString => indices.join('.');
@@ -22,7 +24,7 @@ class Path {
   @override
   String toString() => indices.isEmpty ? "Root" : pathString;
 
-  static bool _listEquals(List<int> a, List<int> b) {
+  static bool _listEquals(Uint8List a, Uint8List b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
     return true;
@@ -37,7 +39,9 @@ class Reference {
   final Path location;
   final String fullAddress;
 
-  /// Internal constructor to centralize logic and string caching
+  // NEW: Address of the Node/Device only (e.g., "1.2.3")
+  final String globalAddress;
+
   Reference._internal({
     required this.isGlobal,
     required this.net,
@@ -46,10 +50,9 @@ class Reference {
     required this.location,
   }) : fullAddress = isGlobal
       ? "$net.$group.$device${location.indices.isNotEmpty ? '.${location.pathString}' : ''}"
-      : "L${location.indices.isNotEmpty ? '.${location.pathString}' : ''}";
+      : "L${location.indices.isNotEmpty ? '.${location.pathString}' : ''}",
+        globalAddress = "$net.$group.$device"; // Fixed key for the device
 
-  /// Global Constructor (Implicitly Global)
-  /// Usage: Reference(0, 1, 10, Path([1, 2]))
   Reference(int net, int group, int device, [Path? path])
       : this._internal(
     isGlobal: true,
@@ -59,8 +62,6 @@ class Reference {
     location: path ?? Path(),
   );
 
-  /// Local Constructor (Explicitly Local)
-  /// Usage: Reference.local(Path([1, 2]))
   Reference.local([Path? path])
       : this._internal(
     isGlobal: false,
@@ -70,24 +71,28 @@ class Reference {
     location: path ?? Path(),
   );
 
-  /// Empty/Invalid Reference
+  /// Helper for 3-byte Net/Group/Device resolution
+  factory Reference.fromNetGroupDevice(int n, int g, int d, [Path? path]) =>
+      Reference(n, g, d, path);
+
   factory Reference.empty() => Reference.local();
 
+  // The first byte of the C++ Reference struct: [GlobalBit:1][PathLen:7]
   int get metadata => (isGlobal ? 0x80 : 0x00) | (location.length & 0x7F);
 
-  factory Reference.fromList(List<int> bytes) {
-    if (bytes.isEmpty) return Reference.local();
+  factory Reference.fromBytes(Uint8List bytes) {
+    if (bytes.length < 4) return Reference.empty();
 
     final meta = bytes[0];
     final isGlobal = (meta & 0x80) != 0;
     final pathLen = meta & 0x7F;
 
-    final n = bytes.length > 1 ? bytes[1] : 0;
-    final g = bytes.length > 2 ? bytes[2] : 0;
-    final d = bytes.length > 3 ? bytes[3] : 0;
+    final n = bytes[1];
+    final g = bytes[2];
+    final d = bytes[3];
 
     List<int> pathSegments = [];
-    if (bytes.length > 4) {
+    if (pathLen > 0 && bytes.length > 4) {
       final end = 4 + pathLen;
       pathSegments = bytes.sublist(4, end > bytes.length ? bytes.length : end);
     }
@@ -101,14 +106,19 @@ class Reference {
     );
   }
 
-  List<int> toBytes() {
-    return [
-      metadata,
-      net,
-      group,
-      device,
-      ...location.indices,
-    ];
+  /// Returns a contiguous buffer matching the C++ Reference struct layout
+  Uint8List toBytes() {
+    final result = Uint8List(4 + location.length);
+    result[0] = metadata;
+    result[1] = net;
+    result[2] = group;
+    result[3] = device;
+
+    if (location.length > 0) {
+      result.setRange(4, 4 + location.length, location.indices);
+    }
+
+    return result;
   }
 
   @override

@@ -214,7 +214,7 @@ class _ObjectPageState extends State<ObjectPage> {
       builder: (context, objectManager, child) {
         final object = objectManager.getObjectByRef(widget.object.id);
         if (object == null) {
-          return const Scaffold(body: Center(child: Text("Object not found")));
+          return const Scaffold(body: Center(child: Text("Object deleted or not found")));
         }
 
         final entries = object.values.values.toList();

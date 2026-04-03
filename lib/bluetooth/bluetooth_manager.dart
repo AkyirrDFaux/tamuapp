@@ -123,9 +123,8 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   Future<void> connect() async {
-    if (selectedDevice == null || _isConnecting || _isConnected) {
-      return;
-    }
+    if (selectedDevice == null || _isConnecting || _isConnected) return;
+
     _isConnecting = true;
     notifyListeners();
 
@@ -133,15 +132,31 @@ class BluetoothManager extends ChangeNotifier {
       if (_connectionType == ConnectionType.ble) {
         await UniversalBle.connect(_bleDevice!.deviceId);
       } else if (_connectionType == ConnectionType.uart) {
-        if (Platform.isAndroid) {
-          print("UART not supported on Android");
-          return;
-        }
+        if (Platform.isAndroid) return;
+
         _serialPort = SerialPort(_serialPortName!);
+
         if (!_serialPort!.openReadWrite()) {
-          print("Failed to open serial port: ${SerialPort.lastError}");
-          throw Exception("Failed to open serial port");
+          throw Exception("Failed to open port: ${SerialPort.lastError}");
         }
+
+        // --- FIXED CONFIGURATION ---
+        final config = SerialPortConfig();
+        config.baudRate = 115200;
+        config.bits = 8;
+        config.stopBits = 1;
+        config.parity = SerialPortParity.none;
+
+        // Set DTR and RTS to 0 (Off) to stop the ESP32/Arduino Reset trigger
+        config.dtr = 0;
+        config.rts = 0;
+
+        // Set Flow Control to None (0)
+        config.setFlowControl(SerialPortFlowControl.none);
+
+        // Apply the configuration to the active port
+        _serialPort!.config = config;
+
         _isConnected = true;
         _isConnecting = false;
         _startSerialPortListen();
@@ -150,6 +165,7 @@ class BluetoothManager extends ChangeNotifier {
     } catch (error) {
       _isConnecting = false;
       _isConnected = false;
+      print("Connection Error: $error");
       notifyListeners();
     }
   }
@@ -245,41 +261,31 @@ class BluetoothManager extends ChangeNotifier {
   }
 
   void _onUartDataReceived(Uint8List value) {
-    if (Platform.isAndroid) return;
-    print('RAW UART IN <<<: ${toHexLog(value)}');
     _rawBuffer.addAll(value);
 
-    // We need at least 4 bytes to check Header(1) + CRC(1) + Len(1) + Tail(1)
-    // But a full packet is 64.
     while (_rawBuffer.length >= 64) {
       if (_rawBuffer[0] == 0xFA) {
         int receivedCrc = _rawBuffer[1];
         int dataLen = _rawBuffer[2];
 
-        // Boundary check for dataLen
         if (dataLen <= 60) {
           int footerIdx = 3 + dataLen;
 
-          // Check if CRC matches AND Footer exists
-          int calculatedCrc = _calculateCrc8(_rawBuffer.sublist(2, 3 + dataLen));
+          // FIX: Match C++ range (starts at index 2, length is dataLen + 1)
+          final crcInput = _rawBuffer.sublist(2, 3 + dataLen);
+          int calculatedCrc = _calculateCrc8(crcInput);
 
           if (receivedCrc == calculatedCrc && _rawBuffer[footerIdx] == 0xBF) {
-            // SUCCESS: Extract payload
             final payload = Uint8List.fromList(_rawBuffer.sublist(3, 3 + dataLen));
             _handleReceivedData(payload);
 
-            // Remove exactly one packet frame and continue loop
             _rawBuffer.removeRange(0, 64);
             continue;
           }
         }
-        // If we got here, 0xFA was found but validation failed.
-        // It might be a fake header inside data. Pop one byte and keep hunting.
-        print("Invalid Packet at 0xFA: Sliding sync...");
-        _rawBuffer.removeAt(0);
+        _rawBuffer.removeAt(0); // Validation failed
       } else {
-        // Not a header, toss it and keep looking
-        _rawBuffer.removeAt(0);
+        _rawBuffer.removeAt(0); // Not a header
       }
     }
   }
@@ -302,89 +308,110 @@ class BluetoothManager extends ChangeNotifier {
       notifyListeners();
     });
   }
-
+  DateTime? _lastReceiveTime;
   void _processMessage() {
-    while (_receivedData.length >= 4) {
+    _lastReceiveTime = DateTime.now();
+    while (_receivedData.length >= 2) {
       final byteData = ByteData.sublistView(_receivedData);
-      final totalSize = byteData.getUint16(0, Endian.little);
 
-      if (_receivedData.length >= totalSize) {
-        final messageBytes = _receivedData.sublist(0, totalSize);
 
-        // LOG: Full reconstructed packet before parsing
-        print('FRAME RECV [Size $totalSize]: ${toHexLog(messageBytes)}');
+      // Read the 16-bit payload length (Little Endian)
+      final int payloadLen = byteData.getUint16(0, Endian.little);
+      final int totalFrameSize = payloadLen + 2;
 
-        final incomingMessage = Message.fromBytes(messageBytes);
+      // Check if the buffer has caught up to the header's requirements
+      if (_receivedData.length >= totalFrameSize) {
 
-        QueueEntry entry = QueueEntry(
-            message: incomingMessage,
-            timestamp: DateTime.now(),
-            direction: MessageDirection.input);
+        final Uint8List payload = _receivedData.sublist(2, totalFrameSize);
 
-        MessageQueue().addEntry(entry);
-        ObjectManager().runMessage(entry.message);
+        // --- FRAMING LOGS ---
+        // Shows: [Header Value] -> [Actual Bytes Consumed]
+        //print('📦 FRAME: Header claims $payloadLen bytes. Total consumed: $totalFrameSize');
+        //print('   Data: ${toHexLog(payload)}');
 
-        _receivedData = _receivedData.sublist(totalSize);
+        // 3. Execute Logic
+        ObjectManager().runMessage(payload);
+
+        // 4. Slice the processed message out of the buffer
+        _receivedData = _receivedData.sublist(totalFrameSize);
       } else {
+        // If we've been waiting for a full frame for more than 1 second, clear it
+        if (_lastReceiveTime != null &&
+            DateTime.now().difference(_lastReceiveTime!).inMilliseconds > 1000) {
+          print("⚠️ Protocol Desync: Clearing stuck buffer (${_receivedData.length} bytes)");
+          _receivedData = Uint8List(0);
+        }
+        // Fragmentation Log: Helpful to see if a packet is "stuck" mid-stream
+        //print('⏳ INCOMPLETE: Need $totalFrameSize bytes, but only have ${_receivedData.length} in buffer.');
         break;
       }
     }
   }
 
-  void sendMessage(Message message) async {
+  void sendMessage(Uint8List payload) async {
     if (!_isConnected) return;
 
     try {
-      Uint8List combinedData = message.pack();
+      // 1. GLOBAL FRAMING
+      // The length header represents the size of the payload ONLY.
+      final int payloadSize = payload.length;
+      final int framedSize = payloadSize + 2;
+      final Uint8List framedData = Uint8List(framedSize);
+      final ByteData bd = ByteData.view(framedData.buffer);
 
-      // LOG: The packed C++ style message
-      print('SEND PACKET [Size ${combinedData.length}]: ${toHexLog(combinedData)}');
+      // Write 2-byte length (Little Endian) + the actual payload
+      bd.setUint16(0, payloadSize, Endian.little);
+      framedData.setRange(2, framedSize, payload);
 
+      print('SEND [Payload: $payloadSize, Total: $framedSize]: ${toHexLog(framedData)}');
+
+      // 2. BLE TRANSMISSION
       if (_connectionType == ConnectionType.ble) {
         if (_writeCharacteristic == null) return;
+
         await UniversalBle.write(
           _bleDevice!.deviceId,
           _writeCharacteristicServiceUuid!,
           _writeCharacteristic!.uuid,
-          combinedData,
+          framedData,
           withoutResponse: _writeCharacteristic!.properties.contains(CharacteristicProperty.writeWithoutResponse),
         );
-      } else if (_connectionType == ConnectionType.uart) {
+      }
+
+      // 3. UART TRANSMISSION
+      else if (_connectionType == ConnectionType.uart) {
         if (Platform.isAndroid || _serialPort == null || !_serialPort!.isOpen) return;
 
-        //Wakeup
-        _serialPort!.write(Uint8List.fromList([0xFF, 0xFF, 0xFF, 0xFF]));
+        // Wakeup Sequence (0xAA is better for auto-baud detection)
+        _serialPort!.write(Uint8List.fromList([0xAA, 0xAA, 0xAA, 0xAA]));
         await Future.delayed(const Duration(milliseconds: 5));
 
-        const int maxData = 60;
+        const int maxDataPerPacket = 60; // Max payload per 64-byte hardware frame
         int offset = 0;
 
-        while (offset < combinedData.length) {
-          final packet = Uint8List(64); // Automatically zero-padded
-          int toCopy = (combinedData.length - offset > maxData) ? maxData : combinedData.length - offset;
+        while (offset < framedData.length) {
+          final int remaining = framedData.length - offset;
+          final int toCopy = (remaining > 60) ? 60 : remaining;
 
+          final packet = Uint8List(64);
           packet[0] = 0xFA;
           packet[2] = toCopy;
 
-          // Copy payload
-          List.copyRange(packet, 3, combinedData, offset, offset + toCopy);
+          final Uint8List chunkData = framedData.sublist(offset, offset + toCopy);
+          packet.setRange(3, 3 + toCopy, chunkData);
+
+          // FIX: Include the Length Byte (index 2) in the CRC calculation
+          // We create a temporary list of [length, ...data] to match C++ 'packet + 2'
+          final crcInput = Uint8List.fromList([toCopy, ...chunkData]);
+          packet[1] = _calculateCrc8(crcInput);
 
           packet[3 + toCopy] = 0xBF;
 
-          // CRC over [Len + Data]
-          packet[1] = _calculateCrc8(packet.sublist(2, 3 + toCopy));
-
           _serialPort!.write(packet);
-          await Future.delayed(const Duration(milliseconds: 2));
+          await Future.delayed(const Duration(milliseconds: 5)); // Increased for stability
           offset += toCopy;
         }
       }
-
-      MessageQueue().addEntry(QueueEntry(
-          message: message,
-          timestamp: DateTime.now(),
-          direction: MessageDirection.output));
-
     } catch (error) {
       print("Error sending message: $error");
     }

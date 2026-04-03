@@ -1,19 +1,20 @@
 enum Functions {
   None(0),
-  CreateObject(1), // Create new
-  DeleteObject(2), // Delete object
-  LoadObject(3),   // Create from ByteArray
-  SaveObject(4),   // Save to file
-  SaveAll(5),
-  ReadObject(6),   // Send to app
-  Refresh(7),
-  ReadValue(8),
-  WriteValue(9),
-  ReadName(10),
-  WriteName(11),
-  ReadInfo(12),
-  SetInfo(13),
-  ReadFile(14);
+  Report(1),
+  CreateObject(2),
+  DeleteObject(3),
+  LoadObject(4),
+  SaveObject(5),
+  SaveAll(6),
+  ReadObject(7),
+  Refresh(8),
+  ReadValue(9),
+  WriteValue(10),
+  ReadName(11),
+  WriteName(12),
+  ReadInfo(13),
+  SetInfo(14),
+  ReadFile(15);
 
   final int value;
   const Functions(this.value);

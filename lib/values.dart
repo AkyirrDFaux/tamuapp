@@ -1,21 +1,21 @@
 import 'types.dart';
 
-Map<Types, List<String>> typeToValueNames = {
-  Types.Status: [
-    "OK",
-    "InvalidID",
-    "InvalidType",
-    "InvalidFunction",
-    "InvalidValue",
-    "MissingModule",
-    "FileError",
-    "PortError",
-    "NoValue",
-    "AutoObject",
-    "OutOfFlash",
-    "NotInFlash",
-    "FlashWritten"
-  ],
+  Map<Types, List<String>> typeToValueNames = {
+    Types.Status: [
+      "OK",
+      "InvalidID",
+      "InvalidType",
+      "InvalidFunction",
+      "InvalidValue",
+      "MissingModule",
+      "FileError",
+      "PortError",
+      "NoValue",
+      "AutoObject",
+      "OutOfFlash",
+      "NotInFlash",
+      "FlashWritten"
+    ],
   Types.Board: [
     "Undefined",    // 0
     "Tamu v1.0",    // 1

@@ -79,6 +79,11 @@ class _ObjectListPageState extends State<ObjectListPage> {
         title: const Text('Object Registry'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.save_outlined),
+            tooltip: 'Save All Changes',
+            onPressed: () => manager.saveAll(),
+          ),
+          IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => showNewObjectDialog(context),
           ),

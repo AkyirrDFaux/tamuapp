@@ -135,13 +135,19 @@ class Reference {
 
 class ValueEntry {
   final Types type;
-  final Path path; // Switched from Reference to Path
+  final Path path;
   dynamic data;
+
+  // NEW: Flags matching the C++ Header bitmask
+  bool isReadOnly;
+  bool isSetupCall;
 
   ValueEntry({
     required this.type,
     required this.path,
     required this.data,
+    this.isReadOnly = false,
+    this.isSetupCall = false,
   });
 }
 
@@ -166,14 +172,17 @@ class NodeObject {
   List<ValueEntry> get sortedValues => values.values.toList();
 
   /// Updates a value using a local Path
-  void updateValue(Path path, Types type, dynamic data) {
+  /// Updates a value using a local Path, including Read-Only and Setup-Call flags
+  void updateValue(Path path, Types type, dynamic data, {bool isReadOnly = false, bool isSetupCall = false}) {
     values[path.pathString] = ValueEntry(
       type: type,
       path: path,
       data: data,
+      isReadOnly: isReadOnly,
+      isSetupCall: isSetupCall,
     );
 
-    print("OBJECT ${id.fullAddress} | Update Path: ${path.pathString} | Total Keys: ${values.length}");
+    print("OBJECT ${id.fullAddress} | Update Path: ${path.pathString} | RO: $isReadOnly | Setup: $isSetupCall");
   }
 
   /// Helper to check if object is currently ignored by the MCU

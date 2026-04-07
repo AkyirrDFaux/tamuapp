@@ -32,11 +32,20 @@ class ObjectManager extends ChangeNotifier {
   }
 
   /// Update a value via global Reference (updates the specific path within that reference)
+  /// Update a value via global Reference (preserves existing flags)
   void updateObjectValue(Reference targetRef, Types type, dynamic data) {
     final obj = getObjectByRef(targetRef);
     if (obj != null) {
-      // Use the Path portion of the reference to update the object
-      obj.updateValue(targetRef.location, type, data);
+      // Look up existing flags for this path string
+      final existing = obj.values[targetRef.location.pathString];
+
+      obj.updateValue(
+        targetRef.location,
+        type,
+        data,
+        isReadOnly: existing?.isReadOnly ?? false,
+        isSetupCall: existing?.isSetupCall ?? false,
+      );
       notifyListeners();
     }
   }
@@ -298,7 +307,14 @@ class ObjectManager extends ChangeNotifier {
       for (int i = 0; i < hCount; i++) {
         int hPos = hStart + (i * 4);
         final int typeVal = payload[hPos];
-        final int depth = payload[hPos + 1];
+
+        // --- NEW: Flag Extraction ---
+        final int rawDepthByte = payload[hPos + 1];
+        final bool isSetupCall = (rawDepthByte & 0x80) != 0; // Bit 7
+        final bool isReadOnly  = (rawDepthByte & 0x40) != 0; // Bit 6
+        final int depth = rawDepthByte & 0x3F;             // Bits 0-5
+        // ----------------------------
+
         final int dataLen = bd.getUint16(hPos + 2, Endian.little);
 
         // Path/Depth Adjustment
@@ -337,14 +353,24 @@ class ObjectManager extends ChangeNotifier {
           currentDataPtr += dataLen;
         }
 
-        // Apply to Object Model
-        target.updateValue(nodePath, dataType, decodedValue);
+        // --- UPDATED: Apply to Object Model with Flags ---
+        target.updateValue(
+            nodePath,
+            dataType,
+            decodedValue,
+            isReadOnly: isReadOnly,
+            isSetupCall: isSetupCall
+        );
 
-        // Add to Logger with Depth Indentation
+        // Add to Logger with metadata hints
+        String flagNote = "";
+        if (isReadOnly) flagNote += "[RO]";
+        if (isSetupCall) flagNote += "[Setup]";
+
         logSegments.add(QueueSegment(
             dataType,
-            "${decodedValue ?? 'Folder'}",
-            depth: depth + 1 // +1 so it nests under the Object Header
+            "${decodedValue ?? 'Folder'} $flagNote",
+            depth: depth + 1
         ));
       }
 
@@ -366,46 +392,51 @@ class ObjectManager extends ChangeNotifier {
 
   /// [0]Func, [1]Ref, [2+]Values
   void readValue(Uint8List payload) {
-    // 1. Minimum check: Function(1) + RefHeader(4) = 5 bytes
     if (payload.length < 5) return;
 
-    // 2. Parse the Reference
-    // Reference.fromBytes knows how to read [Meta][N][G][D] + [Path...]
     final Reference objRef = Reference.fromBytes(payload);
-    // 3. Calculate where the ID ends to find the Payload
-    // This matches C++: uint16_t idSize = 4 + pID->PathLen();
     final int idSize = 4 + objRef.location.length;
-    final int payloadOffset = idSize; // Note: 'payload' here is already after the Func byte
+    final int payloadOffset = idSize;
 
-    // 4. Extract Payload Header: [Type(1)][Length(2)]
     if (payload.length < payloadOffset + 3) return;
     final int typeByte = payload[payloadOffset];
-    final Types dataType = Types.values.firstWhere(
-            (t) => t.value == typeByte,
-        orElse: () => Types.Byte
-    );
+    final Types dataType = Types.fromValue(typeByte);
 
     final ByteData bd = ByteData.view(payload.buffer, payload.offsetInBytes, payload.length);
     final int dataLen = bd.getUint16(payloadOffset + 1, Endian.little);
 
-    // 5. Slice the actual data bytes
     final int dataStart = payloadOffset + 3;
     if (payload.length < dataStart + dataLen) return;
     final Uint8List rawData = payload.sublist(dataStart, dataStart + dataLen);
-    // 6. Deserialize and Update
+
     final targetObject = getObjectByRef(objRef);
     if (targetObject != null) {
       final dynamic parsedData = deserializeData(dataType, rawData);
 
-      // Use the path inside objRef to place data at the correct sub-node
-      targetObject.updateValue(objRef.location, dataType, parsedData);
+      // --- FIX: Preserve Flags ---
+      // Look up the existing entry for this specific path
+      final existingEntry = targetObject.values[objRef.location.pathString];
 
-      // Log to Inspector
+      // If it exists, grab its current flags. Otherwise, default to false.
+      bool currentRO = existingEntry?.isReadOnly ?? false;
+      bool currentSetup = existingEntry?.isSetupCall ?? false;
+
+      // Update the value while keeping the old flags intact
+      targetObject.updateValue(
+        objRef.location,
+        dataType,
+        parsedData,
+        isReadOnly: currentRO,
+        isSetupCall: currentSetup,
+      );
+      // ---------------------------
+
       MessageQueue().addSegments([
         QueueSegment(Types.Function, Functions.ReadValue),
         QueueSegment(Types.Reference, objRef),
         QueueSegment(dataType, parsedData),
       ], MessageDirection.input, raw: payload);
+
       notifyListeners();
     }
   }

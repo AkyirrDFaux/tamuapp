@@ -335,12 +335,25 @@ class _ObjectPageState extends State<ObjectPage> {
                     Padding(
                       padding: EdgeInsets.only(left: (depth - 1) * 20.0, bottom: 6),
                       child: InkWell(
-                        onTap: () => _openEditor(context, Reference(object.id.net, object.id.group, object.id.device, entry.path), entry.data, entry.type),
+                        onTap: entry.isReadOnly
+                            ? () => ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Access Denied: Value is Read-Only"), duration: Duration(seconds: 1))
+                        )
+                            : () => _openEditor(context, Reference(object.id.net, object.id.group, object.id.device, entry.path), entry.data, entry.type),
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.secondary.withOpacity(0.1),
-                            border: Border(left: BorderSide(color: theme.colorScheme.primary.withOpacity(0.5), width: 4)),
+                            color: entry.isReadOnly
+                                ? Colors.white.withOpacity(0.02)
+                                : theme.colorScheme.secondary.withOpacity(0.1),
+                            border: Border(
+                                left: BorderSide(
+                                    color: entry.isReadOnly
+                                        ? Colors.grey.withOpacity(0.4)
+                                        : theme.colorScheme.primary.withOpacity(0.5),
+                                    width: 4
+                                )
+                            ),
                           ),
                           child: Row(
                             children: [
@@ -348,18 +361,30 @@ class _ObjectPageState extends State<ObjectPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text("PATH: ${entry.path.pathString} (${entry.type.name})",
-                                        style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Colors.white38)),
+                                    Row(
+                                      children: [
+                                        Text("PATH: ${entry.path.pathString} (${entry.type.name})",
+                                            style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Colors.white38)),
+                                        const SizedBox(width: 8),
+                                        if (entry.isReadOnly)
+                                          const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
+                                        if (entry.isSetupCall)
+                                          const Padding(
+                                            padding: EdgeInsets.only(left: 4),
+                                            child: Icon(Icons.settings_input_component, size: 12, color: Colors.cyanAccent),
+                                          ),
+                                      ],
+                                    ),
                                     const SizedBox(height: 4),
                                     ValueDisplay(value: entry.data, type: entry.type),
                                   ],
                                 ),
                               ),
+
                               // --- NAVIGATION LOGIC ---
                               if (!isEditMode && entry.type == Types.Reference && entry.data is Reference)
                                 Builder(builder: (context) {
                                   final ref = entry.data as Reference;
-                                  // Only show navigation for GLOBAL references
                                   if (ref.isGlobal) {
                                     return IconButton(
                                       icon: const Icon(Icons.arrow_forward, size: 20, color: Colors.cyanAccent),
@@ -377,14 +402,11 @@ class _ObjectPageState extends State<ObjectPage> {
                                       },
                                     );
                                   } else {
-                                    // Local reference: show a non-navigating hint icon
-                                    return const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                    );
+                                    return const SizedBox.shrink();
                                   }
                                 }),
 
-                              if (isEditMode && !hasChildren)
+                              if (isEditMode && !hasChildren && !entry.isReadOnly)
                                 IconButton(
                                   icon: const Icon(Icons.subdirectory_arrow_right, size: 18, color: Colors.white38),
                                   onPressed: () => _openEditor(context, Reference(object.id.net, object.id.group, object.id.device, generateChildPath(entry.path)), null, Types.Undefined),
@@ -394,6 +416,7 @@ class _ObjectPageState extends State<ObjectPage> {
                         ),
                       ),
                     ),
+
                     // Logic for adding siblings when depth decreases
                     if (isEditMode && nextDepth < depth)
                       ...List.generate(depth - nextDepth, (i) {

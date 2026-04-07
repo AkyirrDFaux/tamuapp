@@ -123,6 +123,7 @@ dynamic deserializeData(Types type, Uint8List raw) {
     case Types.Type:
     case Types.Status:
     case Types.Input:
+    case Types.Texture2D:
       return readUint8(0);
 
     default:
@@ -258,6 +259,7 @@ Uint8List serializeData(Types type, dynamic data) {
     case Types.Type:
     case Types.Status:
     case Types.Input:
+    case Types.Texture2D:
       int val = (data is Enum) ? (data as dynamic).index : (data as int);
       return Uint8List.fromList([val & 0xFF]);
 

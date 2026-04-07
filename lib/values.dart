@@ -107,6 +107,8 @@ import 'types.dart';
     "None",             // 0
     "Equal",            // 1
     "Combine",          // 2
+    "Extract",
+    "Convert",
     "IsEqual",          // 3
     "IsGreater",        // 4
     "IsSmaller",        // 5
@@ -138,7 +140,6 @@ import 'types.dart';
     "SetReset",         // 31
     "Random",           // 32
     "Delay",            // 33
-    "AddDelay",         // 34
     "IfSwitch",         // 35
     "While",            // 36
     "SetFlags",         // 37

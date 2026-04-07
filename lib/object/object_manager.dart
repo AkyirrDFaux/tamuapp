@@ -71,6 +71,24 @@ class ObjectManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clears the local registry and asks the MCU to stream all current objects
+  void format() {
+
+    // 1. Prepare 1-byte payload: [Func:1]
+    final Uint8List payload = Uint8List(1);
+    payload[0] = Functions.Format.value;
+
+    // 2. Log to Inspector
+    MessageQueue().addSegments(
+        [QueueSegment(Types.Function, Functions.Refresh)],
+        MessageDirection.output,
+        raw: payload
+    );
+
+    // 3. Send to MCU
+    BluetoothManager().sendMessage(payload);
+  }
+
   /// Requests the full state of a specific object
   void refreshObject(Reference ref) {
     // 1. Prepare 4-byte payload: [Func:1][Net:1][Group:1][Dev:1]

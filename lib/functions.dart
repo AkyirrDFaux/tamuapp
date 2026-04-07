@@ -14,7 +14,7 @@ enum Functions {
   WriteName(12),
   ReadInfo(13),
   SetInfo(14),
-  ReadFile(15);
+  Format(15);
 
   final int value;
   const Functions(this.value);

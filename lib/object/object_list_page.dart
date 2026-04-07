@@ -85,11 +85,49 @@ class _ObjectListPageState extends State<ObjectListPage> {
           ),
           IconButton(
             icon: const Icon(Icons.add),
+            tooltip: 'Create new object',
             onPressed: () => showNewObjectDialog(context),
           ),
           IconButton(
             icon: const Icon(Icons.sync),
+            tooltip: 'Reload everything',
             onPressed: () => manager.reloadObjects(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.deselect_outlined),
+            tooltip: 'Format memory',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('Format Memory?'),
+                  content: const Text(
+                    'This will permanently erase all stored data.',
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      child: const Text('Cancel'),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                      child: const Text('Format'),
+                      onPressed: () {
+                        manager.format();
+                        Navigator.of(context).pop();
+
+                        // Optional: Show a snackbar confirmation
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Memory formatted')),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),

@@ -1,7 +1,7 @@
 enum Flags {
   none(0),
   auto(1),          // 0b00000001
-  undefined1(2),    // 0b00000010
+  dirty(2),    // 0b00000010
   undefined2(4),    // 0b00000100
   undefined3(8),    // 0b00001000
   runLoop(16),      // 0b00010000

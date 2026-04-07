@@ -75,7 +75,7 @@ class FlagsIconRow extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           _buildReadOnlyFlagIndicator(context, flag: Flags.auto, icon: Icons.hdr_auto_outlined, tooltip: 'Auto-Generated'),
-
+          _buildReadOnlyFlagIndicator(context, flag: Flags.dirty, icon: Icons.save_as_outlined, tooltip: 'Not saved'),
           _buildInteractiveFlagButton(context, flag: Flags.runLoop, icon: Icons.sync, tooltip: 'Run Loop'),
           _buildInteractiveFlagButton(context, flag: Flags.runOnce, icon: Icons.looks_one_outlined, tooltip: 'Run Once'),
           _buildInteractiveFlagButton(context, flag: Flags.runOnStartup, icon: Icons.power_settings_new_outlined, tooltip: 'Run on Startup'),

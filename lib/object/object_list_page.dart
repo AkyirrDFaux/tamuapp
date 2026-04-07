@@ -184,7 +184,9 @@ class _ObjectListPageState extends State<ObjectListPage> {
           Text(object.id.fullAddress, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
           const SizedBox(width: 8),
           if (object.info.flags.has(Flags.auto))
-            const Icon(Icons.hdr_auto_outlined, size: 12, color: Colors.orangeAccent),
+            const Icon(Icons.hdr_auto_outlined, size: 12, color: Colors.grey),
+          if (object.info.flags.has(Flags.dirty))
+            const Icon(Icons.save_as_outlined, size: 12, color: Colors.orangeAccent),
         ],
       ),
       trailing: _buildTrailing(object),

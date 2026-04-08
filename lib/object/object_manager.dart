@@ -289,6 +289,8 @@ class ObjectManager extends ChangeNotifier {
       final objType = ObjectTypes.fromValue(payload[offset++]);
       final target = getObjectByRef(ref) ?? NodeObject(type: objType, id: ref);
 
+      target.values.clear();
+
       target.info.flags.value = payload[offset++];
       target.info.runPeriod = payload[offset++];
       target.info.runPhase = payload[offset++];
@@ -496,6 +498,36 @@ class ObjectManager extends ChangeNotifier {
       QueueSegment(Types.Function, Functions.WriteValue),
       QueueSegment(Types.Reference, ref),
       QueueSegment(type, value),
+    ], MessageDirection.output, raw: payload);
+
+    // 5. Send to MCU
+    BluetoothManager().sendMessage(payload);
+  }
+
+  void deleteValue(Reference ref) {
+    // 1. Serialize the reference
+    // ref.toBytes() returns [Net, Group, Dev, PathLen, ...PathIndices]
+    final Uint8List refBytes = ref.toBytes();
+
+    // 2. Total size: 1 byte (Function Code) + Variable length (Reference)
+    final int totalPayloadSize = 1 + refBytes.length;
+
+    // 3. Build the packed buffer
+    final Uint8List payload = Uint8List(totalPayloadSize);
+
+    int offset = 0;
+
+    // [Byte 0] Function Code
+    payload[offset++] = Functions.WriteValue.value;
+
+    // [Bytes 1...] Reference
+    payload.setRange(offset, offset + refBytes.length, refBytes);
+
+    // 4. Update the Message Inspector
+    // We omit the value/type segments since there is no payload
+    MessageQueue().addSegments([
+      QueueSegment(Types.Function, Functions.WriteValue),
+      QueueSegment(Types.Reference, ref),
     ], MessageDirection.output, raw: payload);
 
     // 5. Send to MCU

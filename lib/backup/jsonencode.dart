@@ -45,6 +45,18 @@ dynamic valueToJson(Types type, dynamic data) {
         };
       }
       return data;
+    case Types.Pin:
+      if (data is (int, String)) {
+        // If the port is null character (0), just save the index to keep it clean
+        final int portCode = data.$2.isNotEmpty ? data.$2.codeUnitAt(0) : 0;
+        if (portCode == 0) return data.$1;
+
+        return {
+          "index": data.$1,
+          "port": data.$2,
+        };
+      }
+      return data;
     default:
       return data;
   }
@@ -111,6 +123,18 @@ dynamic valueFromJson(Types type, dynamic json) {
         runPeriod: json['runPeriod'] ?? 0,
         runPhase: json['runPhase'] ?? 0,
       );
+    case Types.Pin:
+      if (json is Map) {
+        return (
+        (json['index'] as num).toInt(),
+        (json['port'] as String? ?? "")
+        );
+      }
+      if (json is int) {
+        // Fallback for cases where only the index was saved (port 0)
+        return (json, "");
+      }
+      return (0, "");
     default:
       return json;
   }

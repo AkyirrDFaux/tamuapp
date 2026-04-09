@@ -105,9 +105,12 @@ dynamic deserializeData(Types type, Uint8List raw) {
       return readUint32(0);
 
     case Types.Pin:
-      // Matches C++ struct Pin { uint8_t Number; char Port; }
-      if (raw.length < 2) return 0; // Or return a custom Pin object
-      return raw[0]; // Returning Number for now
+    // Matches C++ struct Pin { uint8_t Number; char Port; }
+      if (raw.length < 2) return (0, 'A');
+      int number = raw[0];
+      // Convert ASCII byte back to a String (e.g., 65 -> 'A')
+      String port = String.fromCharCode(raw[1]);
+      return (number, port); // Returns a Tuple/Record: (14, 'A')
 
     case Types.Board:
     case Types.Sensor:
@@ -240,9 +243,15 @@ Uint8List serializeData(Types type, dynamic data) {
       return Uint8List.fromList([data.R, data.G, data.B, data.A]);
 
     case Types.Pin:
-      // Matches: struct Pin { uint8_t Number; char Port; }
-      if (data is int) return Uint8List.fromList([data & 0xFF, 0]);
-      // If data is a custom Pin object, you'd pull data.Number and data.Port
+    // data is expected to be a Record like (14, 'A')
+      if (data is (int, String)) {
+        int number = data.$1;
+        int portChar = data.$2.codeUnitAt(0); // Convert 'A' -> 65
+        return Uint8List.fromList([number & 0xFF, portChar & 0xFF]);
+      }
+      // Fallback for simple integers if needed
+      if (data is int) return Uint8List.fromList([data & 0xFF, 'A'.codeUnitAt(0)]);
+
       return Uint8List.fromList([0, 0]);
 
     case Types.Board:

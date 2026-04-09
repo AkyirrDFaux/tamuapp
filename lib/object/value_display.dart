@@ -73,6 +73,21 @@ class ValueDisplay extends StatelessWidget {
         style: dataStyle,
       );
     }
+    /// 8. Handle Pin {Index, Port} Tuple
+    if (type == Types.Pin && value is (int, String)) {
+      // Check if Port is the null character (0) or empty
+      final int portCode = value.$2.isNotEmpty ? value.$2.codeUnitAt(0) : 0;
+      final String portLabel = portCode == 0 ? "" : value.$2;
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.bolt, size: 14, color: Colors.orangeAccent),
+          const SizedBox(width: 4),
+          _buildEnumBadge("PIN $portLabel${value.$1}", theme, color: Colors.orangeAccent),
+        ],
+      );
+    }
 
     return Text(
       _getFormattedString(),

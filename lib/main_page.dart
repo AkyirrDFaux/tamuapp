@@ -1,9 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_ble/universal_ble.dart' as universal_ble;
 
+import 'backup_page.dart';
 import 'bluetooth/discovery_page.dart';
 import 'bluetooth/bluetooth_manager.dart';
 import 'message/queue_page.dart';
@@ -181,6 +181,17 @@ class _MainPage extends State<MainPage> {
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (context) => const QueuePage()),
+                      );
+                    },
+                  ),
+                  _buildMenuButton(
+                    title: 'Backup and\n Restore',
+                    icon: Icons.settings_backup_restore_outlined,
+                    backgroundColor: theme.colorScheme.tertiaryContainer,
+                    contentColor: theme.colorScheme.onTertiaryContainer,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (context) => const BackupPage()),
                       );
                     },
                   ),

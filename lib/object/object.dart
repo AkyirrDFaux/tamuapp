@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import '../info.dart';
+import '../jsonencode.dart';
 import '../types.dart';
 
 import 'dart:typed_data';
@@ -9,6 +10,24 @@ class Path {
   final Uint8List indices;
 
   Path([List<int>? input]) : indices = Uint8List.fromList(input ?? []);
+
+  /// Creates a Path from a dot-separated string (e.g., "0.1.2")
+  factory Path.fromString(String path) {
+    if (path.isEmpty || path.toLowerCase() == "root") {
+      return Path([]);
+    }
+
+    try {
+      final List<int> parsed = path
+          .split('.')
+          .map((s) => int.parse(s))
+          .toList();
+      return Path(parsed);
+    } catch (e) {
+      // Fallback for malformed strings
+      return Path([]);
+    }
+  }
 
   int get length => indices.length;
   String get pathString => indices.join('.');
@@ -26,7 +45,9 @@ class Path {
 
   static bool _listEquals(Uint8List a, Uint8List b) {
     if (a.length != b.length) return false;
-    for (int i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
     return true;
   }
 }
@@ -104,6 +125,25 @@ class Reference {
       device: d,
       location: Path(pathSegments),
     );
+  }
+
+  factory Reference.parse(String address) {
+    final parts = address.split('.');
+    if (parts.length < 3) return Reference(0, 0, 0, Path([]));
+
+    int net = int.tryParse(parts[0]) ?? 0;
+    int group = int.tryParse(parts[1]) ?? 0;
+    int device = int.tryParse(parts[2]) ?? 0;
+
+    // Everything after the first 3 parts is the internal path
+    List<int> pathIndices = [];
+    if (parts.length > 3) {
+      pathIndices = parts.sublist(3)
+          .map((p) => int.tryParse(p) ?? 0)
+          .toList();
+    }
+
+    return Reference(net, group, device, Path(pathIndices));
   }
 
   /// Returns a contiguous buffer matching the C++ Reference struct layout
@@ -191,6 +231,29 @@ class NodeObject {
   /// Helper to set the object to run once on the next MCU cycle
   void triggerRunOnce() {
     info.flags.add(Flags.runOnce);
+  }
+
+  // In NodeObject class (or as an extension)
+  Map<String, dynamic> toBackupJson() {
+    return {
+      "id": id.globalAddress,
+      "name": name,
+      "type": type.name,
+      // Use valueToJson for the ObjectInfo structure
+      "info": valueToJson(Types.ObjectInfo, info),
+      "values": values.values.map((v) {
+        return {
+          "path": v.path.pathString,
+          "type": v.type.name,
+          // Use our symmetric helper to handle Vector2D, Enums, etc.
+          "data": valueToJson(v.type, v.data),
+          "meta": {
+            "readOnly": v.isReadOnly,
+            "setupCall": v.isSetupCall
+          }
+        };
+      }).toList(),
+    };
   }
 }
 

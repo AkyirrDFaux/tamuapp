@@ -3,7 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_ble/universal_ble.dart' as universal_ble;
 
-import 'backup_page.dart';
+import 'backup/backup_page.dart';
 import 'bluetooth/discovery_page.dart';
 import 'bluetooth/bluetooth_manager.dart';
 import 'message/queue_page.dart';

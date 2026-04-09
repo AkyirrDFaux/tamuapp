@@ -1,7 +1,7 @@
 import 'dart:collection';
 
 import '../info.dart';
-import '../jsonencode.dart';
+import '../backup/jsonencode.dart';
 import '../types.dart';
 
 import 'dart:typed_data';

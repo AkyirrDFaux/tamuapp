@@ -624,6 +624,73 @@ class ObjectManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  void writeName(Reference ref, String name) {
+    // 1. Convert string to UTF-8 bytes
+    final Uint8List nameBytes = Uint8List.fromList(utf8.encode(name));
+
+    // 2. Prepare payload: [Func(1)][Ref(3)][Len(1)][Name(N)]
+    final Uint8List payload = Uint8List(5 + nameBytes.length);
+
+    payload[0] = Functions.WriteName.value; // Ensure Functions.WriteName exists in your enum
+    payload[1] = ref.net;
+    payload[2] = ref.group;
+    payload[3] = ref.device;
+    payload[4] = nameBytes.length; // Length byte matches Input.Array[4] in C++
+
+    // Copy name bytes into payload starting at index 5
+    payload.setRange(5, 5 + nameBytes.length, nameBytes);
+
+    // 3. Log to MessageQueue
+    MessageQueue().addSegments(
+        [
+          QueueSegment(Types.Function, Functions.WriteName),
+          QueueSegment(Types.Reference, ref),
+          QueueSegment(Types.Text, name),
+        ],
+        MessageDirection.output,
+        raw: payload
+    );
+
+    // 4. Send to MCU
+    BluetoothManager().sendMessage(payload);
+  }
+
+  void onReadNameResponse(Uint8List payload) {
+    // 1. Validation: Min 4 bytes [Net][Group][Dev][Len]
+    if (payload.length < 4) return;
+
+    // 2. Parse Reference
+    final ref = Reference(payload[0], payload[1], payload[2], Path([]));
+
+    // 3. Parse Name Length and String
+    final int nameLen = payload[3];
+
+    // Safety check to ensure we don't read past the buffer
+    if (4 + nameLen > payload.length) return;
+
+    final String name = utf8.decode(payload.sublist(4, 4 + nameLen -1));
+
+    // 4. Update the ObjectManager's local state
+    final object = getObjectByRef(ref);
+    if (object != null) {
+      // Assuming NodeObject has a name setter or you notify listeners
+      object.name = name;
+    }
+
+    // 5. Log to MessageQueue
+    MessageQueue().addSegments(
+        [
+          QueueSegment(Types.Function, Functions.ReadName),
+          QueueSegment(Types.Reference, ref),
+          QueueSegment(Types.Text, name),
+        ],
+        MessageDirection.input,
+        raw: payload
+    );
+
+    notifyListeners();
+  }
+
   void runMessage(Uint8List data) {
     if (data.isEmpty) return;
 
@@ -661,6 +728,9 @@ class ObjectManager extends ChangeNotifier {
         break;
       case Functions.Report:
         handleReport(payload);
+        break;
+      case Functions.ReadName: // Or Functions.WriteName if the MCU uses the same code for echo
+        onReadNameResponse(payload);
         break;
       default:
         print("Function $functionCall (Byte: $functionValue) not implemented.");

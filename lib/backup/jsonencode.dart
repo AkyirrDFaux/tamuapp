@@ -1,8 +1,8 @@
 import 'package:tamuapp/types.dart';
 import 'package:tamuapp/values.dart';
 
-import 'info.dart';
-import 'object/object.dart';
+import '../info.dart';
+import '../object/object.dart';
 
 dynamic valueToJson(Types type, dynamic data) {
   if (data == null) return null;

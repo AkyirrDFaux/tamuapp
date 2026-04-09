@@ -206,6 +206,40 @@ class _ObjectPageState extends State<ObjectPage> {
     return Path([...parent.indices, 0]);
   }
 
+  void _showRenameDialog(NodeObject object) {
+    final controller = TextEditingController(text: object.name);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Rename Object"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "Object Name",
+            hintText: "Enter new name",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("CANCEL"),
+          ),
+          TextButton(
+            onPressed: () {
+              // Usually, the name is stored inside ObjectInfo or
+              // handled by a specific name write command in ObjectManager
+              ObjectManager().writeName(object.id, controller.text);
+              Navigator.pop(context);
+            },
+            child: const Text("RENAME"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -231,7 +265,23 @@ class _ObjectPageState extends State<ObjectPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(object.name),
+            // The Title area (Left/Center)
+            title: InkWell(
+              onTap: () => _showRenameDialog(object),
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(object.name),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.edit, size: 14, color: Colors.white24),
+                  ],
+                ),
+              ),
+            ),
+            // The Button area (Right side)
             actions: [
               IconButton(
                 icon: Icon(isEditMode ? Icons.check : Icons.edit_note_outlined),
@@ -248,9 +298,16 @@ class _ObjectPageState extends State<ObjectPage> {
                     ),
                     if (_refreshInterval > 0)
                       Positioned(
-                        right: 8, top: 8,
-                        child: Container(width: 8, height: 8,
-                            decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.greenAccent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                       ),
                   ],
                 ),

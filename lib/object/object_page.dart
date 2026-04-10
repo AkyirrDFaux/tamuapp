@@ -464,21 +464,26 @@ class _ObjectPageState extends State<ObjectPage> {
                                 }),
 
                               // --- EDIT MODE CONTROLS ---
-                              if (isEditMode && !entry.isReadOnly) ...[
-                                // Delete Button
+                              if (isEditMode) ...[
+                                // 1. Add Child Button (Always available, even for Read-Only)
                                 IconButton(
-                                  icon: const Icon(Icons.delete_forever, size: 20, color: Colors.redAccent),
+                                  icon: const Icon(Icons.subdirectory_arrow_right, size: 18, color: Colors.greenAccent),
                                   onPressed: () {
-                                    final ref = Reference(object.id.net, object.id.group, object.id.device, entry.path);
-                                    objectManager.deleteValue(ref);
+                                    final newPath = Path([...entry.path.indices, 0]); // Direct inline logic
+                                    _openEditor(context, Reference(object.id.net, object.id.group, object.id.device, newPath), null, Types.Undefined);
                                   },
                                 ),
-                                // Add Child Button (only if no children exist)
-                                if (!hasChildren)
+
+                                // 2. Modification Buttons (Hidden if Read-Only)
+                                if (!entry.isReadOnly) ...[
                                   IconButton(
-                                    icon: const Icon(Icons.subdirectory_arrow_right, size: 18, color: Colors.white38),
-                                    onPressed: () => _openEditor(context, Reference(object.id.net, object.id.group, object.id.device, generateChildPath(entry.path)), null, Types.Undefined),
+                                    icon: const Icon(Icons.delete_forever, size: 20, color: Colors.redAccent),
+                                    onPressed: () {
+                                      final ref = Reference(object.id.net, object.id.group, object.id.device, entry.path);
+                                      objectManager.deleteValue(ref);
+                                    },
                                   ),
+                                ],
                               ],
                             ],
                           ),

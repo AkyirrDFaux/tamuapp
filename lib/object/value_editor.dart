@@ -68,6 +68,8 @@ class _ValueEditorState extends State<ValueEditor> {
   }
 
   dynamic _getDefaultValueForType(Types type) {
+    if (isInValueEnum(type)) return 0;
+
     switch (type) {
       case Types.PortNumber: return -1;
       case Types.Bool:      return false;
@@ -86,7 +88,12 @@ class _ValueEditorState extends State<ValueEditor> {
   }
 
   void _syncController() {
-    _textController.text = currentValue?.toString() ?? "";
+    // Ensure we don't treat 0 as null here
+    if (currentValue == null) {
+      _textController.text = "";
+    } else {
+      _textController.text = currentValue.toString();
+    }
   }
 
   void _updateValue(dynamic newValue) {
@@ -281,7 +288,6 @@ class _ValueEditorState extends State<ValueEditor> {
 
   Widget _buildEnumEditor() {
     final theme = Theme.of(context);
-    // Fetch the exact same map used by the display logic
     final Map<int, String>? options = getValueEnumMap(selectedType);
 
     if (options == null || options.isEmpty) {
@@ -290,14 +296,14 @@ class _ValueEditorState extends State<ValueEditor> {
 
     return ConstrainedBox(
       constraints: BoxConstraints(
-        // Limits height for long lists (e.g., Sensor list)
-        // while staying compact for short lists (e.g., Bool/Status)
         maxHeight: MediaQuery.of(context).size.height * 0.4,
       ),
       child: ListView(
         shrinkWrap: true,
         children: options.entries.map((e) {
-          final isSelected = (currentValue == e.key);
+          // FIX: Explicitly check for null. 0 is a valid value and should not be treated as null.
+          final isSelected = (currentValue != null && currentValue == e.key);
+
           return Container(
             margin: const EdgeInsets.only(bottom: 2),
             decoration: BoxDecoration(
@@ -313,9 +319,12 @@ class _ValueEditorState extends State<ValueEditor> {
                 ),
               ),
               value: e.key,
-              groupValue: currentValue is int ? currentValue : 0,
+              // FIX: groupValue must be nullable int or handle 0 explicitly
+              groupValue: currentValue is int ? currentValue as int : null,
               activeColor: theme.colorScheme.primary,
-              onChanged: (val) => _updateValue(val),
+              onChanged: (val) {
+                if (val != null) _updateValue(val);
+              },
               controlAffinity: ListTileControlAffinity.trailing,
               dense: true,
             ),

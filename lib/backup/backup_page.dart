@@ -478,17 +478,14 @@ class _BackupPageState extends State<BackupPage> {
             orElse: () => null
         );
 
-        // 1. Handle Type Mismatch (Delete then Recreate)
+        // 1. Handle Type Mismatch
         if (existing != null && existing.type.name != objData['type']) {
-          // Final safety check for Auto flag
           if (existing.info.flags.has(Flags.auto)) continue;
-
-          print("TYPE MISMATCH at ${targetRef.globalAddress}: Deleting old ${existing.type.name} to create ${objData['type']}");
           objectManager.deleteObject(targetRef);
-          await Future.delayed(const Duration(milliseconds: 50));
+          await Future.delayed(const Duration(milliseconds: 100));
         }
 
-        // 2. Create/Update Object
+        // 2. Create Object shell (No Info yet)
         final incomingType = ObjectTypes.values.firstWhere(
                 (e) => e.name == objData['type'],
             orElse: () => ObjectTypes.Undefined
@@ -496,52 +493,44 @@ class _BackupPageState extends State<BackupPage> {
 
         objectManager.createObject(targetRef, incomingType);
         await Future.delayed(const Duration(milliseconds: 100));
-        objectManager.writeInfo(targetRef, valueFromJson(Types.ObjectInfo, objData['info']));
 
-        // 3. Process Values
+        // NEW: Set the Object Name
+        // Assuming 'name' exists at the top level of your objData JSON
+        if (objData['name'] != null) {
+          objectManager.writeName(targetRef, objData['name']);
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+
+        // 3. Process Values FIRST
         final List<dynamic> importValues = objData['values'] ?? [];
         final Set<String> incomingPaths = importValues.map((v) => v['path'] as String).toSet();
 
-        // A. DELETE local values that are NOT in the backup
+        // A. DELETE local orphans
         if (existing != null) {
           for (var pathKey in existing.values.keys) {
             if (!incomingPaths.contains(pathKey)) {
-              print("DELETING ORPHAN PATH: $pathKey at ${targetRef.globalAddress}");
-              // Construct a reference specifically for this path to delete it
               final deleteRef = Reference(targetRef.net, targetRef.group, targetRef.device, Path.fromString(pathKey));
               objectManager.deleteValue(deleteRef);
-              await Future.delayed(const Duration(milliseconds: 20));
+              await Future.delayed(const Duration(milliseconds: 100));
             }
           }
         }
 
-        // B. WRITE/UPDATE values from backup
+        // B. WRITE values from backup (Population Phase)
         for (var v in importValues) {
-          final dType = Types.values.firstWhere(
-                  (e) => e.name == v['type'],
-              orElse: () => Types.Byte
-          );
-
-          final valRef = Reference(
-              targetRef.net,
-              targetRef.group,
-              targetRef.device,
-              Path.fromString(v['path'])
-          );
-
-          // Ensure we extract the data, even if it's null/default
+          final dType = Types.values.firstWhere((e) => e.name == v['type'], orElse: () => Types.Byte);
+          final valRef = Reference(targetRef.net, targetRef.group, targetRef.device, Path.fromString(v['path']));
           final decodedData = valueFromJson(dType, v['data']);
 
-          // Force the write even if decodedData is null
-          // (unless your MCU protocol specifically forbids null writes)
-          objectManager.writeValue(
-            valRef,
-            decodedData,
-            type: dType,
-          );
-
-          await Future.delayed(const Duration(milliseconds: 20));
+          objectManager.writeValue(valRef, decodedData, type: dType);
+          await Future.delayed(const Duration(milliseconds: 100));
         }
+
+        // 4. SET INFO LAST (Activation Phase)
+        // This sets the flags (like Auto) and metadata AFTER the values are in place.
+        objectManager.writeInfo(targetRef, valueFromJson(Types.ObjectInfo, objData['info']));
+        await Future.delayed(const Duration(milliseconds: 100));
+
         objectManager.refreshObject(targetRef);
       }
 

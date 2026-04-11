@@ -35,7 +35,7 @@ dynamic valueToJson(Types type, dynamic data) {
     case Types.Colour:
       return {"r": data.R, "g": data.G, "b": data.B, "a": data.A};
     case Types.Reference:
-      return data is Reference ? data.globalAddress : data.toString();
+      return (data is Reference) ? data.fullAddress : data.toString();
     case Types.ObjectInfo:
       if (data is ObjectInfo) {
         return {

@@ -63,16 +63,17 @@ class Reference {
   // NEW: Address of the Node/Device only (e.g., "1.2.3")
   final String globalAddress;
 
+  // Inside Reference class
   Reference._internal({
     required this.isGlobal,
     required this.net,
     required this.group,
     required this.device,
     required this.location,
-  }) : fullAddress = isGlobal
-      ? "$net.$group.$device${location.indices.isNotEmpty ? '.${location.pathString}' : ''}"
-      : "L${location.indices.isNotEmpty ? '.${location.pathString}' : ''}",
-        globalAddress = "$net.$group.$device"; // Fixed key for the device
+  }) : globalAddress = "$net.$group.$device",
+        fullAddress = isGlobal
+            ? "$net.$group.$device${location.indices.isNotEmpty ? ':${location.pathString}' : ''}"
+            : "L${location.indices.isNotEmpty ? ':${location.pathString}' : ''}";
 
   Reference(int net, int group, int device, [Path? path])
       : this._internal(
@@ -128,22 +129,30 @@ class Reference {
   }
 
   factory Reference.parse(String address) {
-    final parts = address.split('.');
-    if (parts.length < 3) return Reference(0, 0, 0, Path([]));
+    final List<String> mainParts = address.split(':');
+    final String identity = mainParts[0];
+    final String pathString = mainParts.length > 1 ? mainParts[1] : "";
 
-    int net = int.tryParse(parts[0]) ?? 0;
-    int group = int.tryParse(parts[1]) ?? 0;
-    int device = int.tryParse(parts[2]) ?? 0;
-
-    // Everything after the first 3 parts is the internal path
+    // Handle Internal Path
     List<int> pathIndices = [];
-    if (parts.length > 3) {
-      pathIndices = parts.sublist(3)
+    if (pathString.isNotEmpty) {
+      pathIndices = pathString.split('.')
           .map((p) => int.tryParse(p) ?? 0)
           .toList();
     }
 
-    return Reference(net, group, device, Path(pathIndices));
+    if (identity == 'L') {
+      return Reference.local(Path(pathIndices));
+    }
+
+    // Handle Global N.G.D
+    final ngd = identity.split('.');
+    return Reference(
+      ngd.length > 0 ? (int.tryParse(ngd[0]) ?? 0) : 0,
+      ngd.length > 1 ? (int.tryParse(ngd[1]) ?? 0) : 0,
+      ngd.length > 2 ? (int.tryParse(ngd[2]) ?? 0) : 0,
+      Path(pathIndices),
+    );
   }
 
   /// Returns a contiguous buffer matching the C++ Reference struct layout

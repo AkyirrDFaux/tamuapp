@@ -29,7 +29,7 @@ class QueueEntry {
 class MessageQueue extends ChangeNotifier {
   static final MessageQueue _instance = MessageQueue._internal();
   factory MessageQueue() => _instance;
-  MessageQueue._internal({int maxLength = 100}) : _maxLength = maxLength;
+  MessageQueue._internal({int maxLength = 500}) : _maxLength = maxLength;
 
   final int _maxLength;
   final Queue<QueueEntry> _queue = Queue<QueueEntry>();

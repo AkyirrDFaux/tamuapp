@@ -607,19 +607,43 @@ class ObjectManager extends ChangeNotifier {
   }
 
   void handleReport(Uint8List payload) {
-    // 1. Validation: Need at least 1 byte for the Status index
-    if (payload.length < 1) return;
+    // 1. Validation: We need at least 2 bytes (Status + Length byte)
+    if (payload.length < 2) return;
 
-    // 2. Parse the Status String using your new lookup map
+    // 2. Parse the Status
     final int statusIndex = payload[0];
     final String statusName = getValueEnum(Types.Status, statusIndex) ?? "Unknown ($statusIndex)";
 
-    // 4. Update the Inspector
-    // This turns raw bytes into: [Report] [Status: InvalidID]
-    MessageQueue().addSegments([
-      QueueSegment(Types.Function, Functions.Report),
-      QueueSegment(Types.Status, statusName),
-    ], MessageDirection.input, raw: payload);
+    // 3. Parse the Length (prepended at index 1 in C++)
+    final int nameLen = payload[1];
+
+    // 4. Handle the optional Message text
+    if (nameLen > 0) {
+      final int start = 2; // Text begins after Status and Length bytes
+      final int end = start + nameLen;
+
+      // Safety check: ensure the packet isn't malformed/truncated
+      if (end > payload.length) {
+        // Handle error or log: "Truncated report message"
+        return;
+      }
+
+      // sublist(2, 2 + nameLen) captures exactly 'nameLen' bytes.
+      final String text = utf8.decode(payload.sublist(start, end));
+
+      MessageQueue().addSegments([
+        QueueSegment(Types.Function, Functions.Report),
+        QueueSegment(Types.Status, statusName),
+        QueueSegment(Types.Text, text),
+      ], MessageDirection.input, raw: payload);
+    }
+    else {
+      // No text, just report the status
+      MessageQueue().addSegments([
+        QueueSegment(Types.Function, Functions.Report),
+        QueueSegment(Types.Status, statusName),
+      ], MessageDirection.input, raw: payload);
+    }
 
     notifyListeners();
   }

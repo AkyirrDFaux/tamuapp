@@ -80,7 +80,8 @@ import 'types.dart';
   ],
   Types.I2CDevice: [
     "Undefined",
-    "LSM6DS3TRC"
+    "LSM6DS3TRC",
+    "BMI160"
   ],
   Types.Input: [
     "Undefined",

@@ -69,7 +69,8 @@ import 'types.dart';
   Types.Display: [
     "Undefined",        // 0
     "GenericLEDMatrix", // 1
-    "Reserved", "Reserved", "Reserved", "Reserved",
+    "GenericLEDMatrixWeave",
+    "Reserved", "Reserved", "Reserved",
     "Reserved", "Reserved", "Reserved", "Reserved",
     "Vysi v1.0",        // 10
   ],
@@ -86,7 +87,9 @@ import 'types.dart';
   Types.Input: [
     "Undefined",
     "Button",
+    "ButtonInverted",
     "ButtonWithLED",
+    "ButtonWithLEDInverted"
   ],
   Types.Sensor: [       // Added missing SensorTypes
     "Undefined",
@@ -104,48 +107,55 @@ import 'types.dart';
     "PWM",
     "Servo",
   ],
-  Types.Operation: [
-    "None",             // 0
-    "Equal",            // 1
-    "Combine",          // 2
-    "Extract",
-    "Convert",
-    "IsEqual",          // 3
-    "IsGreater",        // 4
-    "IsSmaller",        // 5
-    "Add",              // 6
-    "Subtract",         // 7
-    "Multiply",         // 8
-    "Divide",           // 9
-    "Power",            // 10
-    "Absolute",         // 11
-    "Min",              // 12
-    "Max",              // 13
-    "Modulo",           // 14
-    "Sine",             // 15
-    "Square",           // 16
-    "Sawtooth",         // 17
-    "Magnitude",        // 18
-    "Angle",            // 19
-    "Normalize",        // 20
-    "DotProduct",       // 21
-    "CrossProduct",     // 22
-    "Map",              // 23
-    "Clamp",            // 24
-    "Deadzone",         // 25
-    "LinInterpolation", // 26
-    "And",              // 27
-    "Or",               // 28
-    "Not",              // 29
-    "Edge",             // 30
-    "SetReset",         // 31
-    "Random",           // 32
-    "Delay",            // 33
-    "IfSwitch",         // 35
-    "While",            // 36
-    "SetFlags",         // 37
-    "ResetFlags",       // 38
-  ]
+    Types.Operation: [
+      "None",             // 0
+      "Set",              // 1
+      "Delete",           // 2
+      "ToBool",           // 3
+      "ToByte",           // 4
+      "ToInt",            // 5
+      "ToNumber",         // 6
+      "ToVector2D",       // 7
+      "ToVector3D",       // 8
+      "ToCoord2D",        // 9
+      "ToColour",         // 10
+      "ToColourHSV",      // 11
+      "Extract",          // 12
+      "IsEqual",          // 13
+      "IsGreater",        // 14
+      "IsSmaller",        // 15
+      "Add",              // 16
+      "Subtract",         // 17
+      "Multiply",         // 18
+      "Divide",           // 19
+      "Power",            // 20
+      "Absolute",         // 21
+      "Min",              // 22
+      "Max",              // 23
+      "Modulo",           // 24
+      "Random",           // 25
+      "Sine",             // 26
+      "Square",           // 27
+      "Sawtooth",         // 28
+      "Magnitude",        // 29
+      "Angle",            // 30
+      "Normalize",        // 31
+      "DotProduct",       // 32
+      "CrossProduct",     // 33
+      "Clamp",            // 34
+      "Deadzone",         // 35
+      "LinInterpolation", // 36
+      "And",              // 37
+      "Or",               // 38
+      "Not",              // 39
+      "Edge",             // 40
+      "SetReset",         // 41
+      "Delay",            // 42
+      "IfSwitch",         // 43
+      "SetRunOnce",       // 44
+      "SetRunLoop",       // 45
+      "SetReference"
+    ]
 };
 
 String? getValueEnum(Types type, int index) {

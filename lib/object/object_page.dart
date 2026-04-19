@@ -381,6 +381,33 @@ class _ObjectPageState extends State<ObjectPage> {
                 ),
                 const Divider(height: 32),
 
+                if (entries.isEmpty && isEditMode)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        children: [
+                          const Text("No values found for this object.",
+                              style: TextStyle(color: Colors.white38)),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              // Path [0] is the standard first entry for an empty object
+                              final firstPath = Path([0]);
+                              _openEditor(
+                                  context,
+                                  Reference(object.id.net, object.id.group, object.id.device, firstPath),
+                                  null,
+                                  Types.Undefined
+                              );
+                            },
+                            icon: const Icon(Icons.add),
+                            label: const Text("ADD FIRST VALUE (Path 0)"),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ...entries.asMap().entries.expand((mapEntry) {
                   final int idx = mapEntry.key;
                   final entry = mapEntry.value;

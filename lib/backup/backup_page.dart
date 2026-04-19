@@ -532,6 +532,7 @@ class _BackupPageState extends State<BackupPage> {
         await Future.delayed(const Duration(milliseconds: 100));
 
         objectManager.refreshObject(targetRef);
+        await Future.delayed(const Duration(milliseconds: 200));
       }
 
       if (mounted) Navigator.pop(context);

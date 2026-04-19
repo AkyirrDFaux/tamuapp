@@ -154,7 +154,8 @@ import 'types.dart';
       "IfSwitch",         // 43
       "SetRunOnce",       // 44
       "SetRunLoop",       // 45
-      "SetReference"
+      "SetReference",
+      "Save"
     ]
 };
 

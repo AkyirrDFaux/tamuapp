@@ -5,6 +5,22 @@ import '../values.dart';
 import 'object.dart';
 import 'object_manager.dart';
 
+final Map<Types, IconData> typeIcons = {
+  Types.Reference: Icons.link,
+  Types.Operation: Icons.settings_input_component,
+  Types.Bool: Icons.toggle_on,
+  Types.Byte: Icons.memory,
+  Types.Integer: Icons.pin,
+  Types.Number: Icons.calculate,
+  Types.Text: Icons.text_fields,
+  Types.Colour: Icons.palette,
+  Types.Vector2D: Icons.open_with,
+  Types.Vector3D: Icons.threed_rotation,
+  Types.Coord2D: Icons.map,
+  Types.Coord3D: Icons.layers,
+  Types.PortNumber: Icons.settings_ethernet,
+};
+
 class ValueEditor extends StatefulWidget {
   final Reference reference;
   final dynamic initialValue;
@@ -45,7 +61,7 @@ class ValueEditor extends StatefulWidget {
 class _ValueEditorState extends State<ValueEditor> {
   late Types selectedType;
   late dynamic currentValue;
-
+  bool _isSelectingType = false;
   final TextEditingController _textController = TextEditingController();
 
   @override
@@ -110,43 +126,155 @@ class _ValueEditorState extends State<ValueEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Logic for sorted types remains the same...
+    final priorityTypes = [Types.Reference, Types.Operation];
+    final basicTypes = [Types.Bool, Types.Byte, Types.Integer, Types.Number, Types.Text, Types.PortNumber];
+    final complexTypes = [Types.Colour, Types.Vector2D, Types.Vector3D, Types.Coord2D, Types.Coord3D];
+    final allSortedTypes = [...priorityTypes, ...basicTypes, ...complexTypes, ...Types.values.where((t) => !priorityTypes.contains(t) && !basicTypes.contains(t) && !complexTypes.contains(t))];
+
     return AlertDialog(
       backgroundColor: theme.colorScheme.surface,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("EDIT VALUE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38)),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<Types>(
-            value: selectedType,
-            decoration: const InputDecoration(labelText: "Data Type", isDense: true, border: OutlineInputBorder()),
-            items: Types.values.map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
-            onChanged: _onTypeChanged,
-          ),
-        ],
+      insetPadding: const EdgeInsets.all(8), // Near full screen
+      contentPadding: EdgeInsets.zero,
+      content: SizedBox(
+        width: MediaQuery.of(context).size.width,
+        height: MediaQuery.of(context).size.height * 0.8,
+        child: Column(
+          children: [
+            // --- UNIFIED TOP NAVIGATION BAR ---
+            _buildTopBar(theme),
+
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: _isSelectingType
+                    ? _buildFullTypeGrid(allSortedTypes, theme)
+                    : _buildEditorView(),
+              ),
+            ),
+          ],
+        ),
       ),
-      content: SingleChildScrollView(
-        child: SizedBox(
-          width: 300,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: KeyedSubtree(
-              key: ValueKey(selectedType), // Forces fresh widget when type changes
-              child: _buildEditorForType(),
+    );
+  }
+
+  Widget _buildTopBar(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 12, 12, 12),
+      decoration: BoxDecoration(
+          color: Colors.black38,
+          border: Border(bottom: BorderSide(color: Colors.white10))
+      ),
+      child: Row(
+        children: [
+          // Left Side: Type Toggle / Back
+          IconButton(
+            icon: Icon(_isSelectingType ? Icons.arrow_back : Icons.grid_view,
+                size: 28, color: theme.colorScheme.primary),
+            onPressed: () => setState(() => _isSelectingType = !_isSelectingType),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Center: Title Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_isSelectingType ? "CHANGE DATA TYPE" : "EDITING VALUE",
+                    style: const TextStyle(fontSize: 10, color: Colors.white38, fontWeight: FontWeight.bold)),
+                Text(selectedType.name.toUpperCase(),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+              ],
             ),
           ),
-        ),
+
+          // Right Side: Action Buttons (Only show when NOT selecting type)
+          if (!_isSelectingType) ...[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("CANCEL", style: TextStyle(color: Colors.white54, fontSize: 12)),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              onPressed: () {
+                widget.onApply(selectedType, currentValue);
+                Navigator.pop(context);
+              },
+              child: const Text("APPLY", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ]
+        ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
-        ElevatedButton(
-          onPressed: () {
-            widget.onApply(selectedType, currentValue);
-            Navigator.pop(context);
-          },
-          child: const Text("APPLY"),
+    );
+  }
+
+  Widget _buildFullTypeGrid(List<Types> types, ThemeData theme) {
+    return Container(
+      key: const ValueKey("TypeGrid"),
+      color: Colors.black26,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.9, // Slightly taller for the big text
         ),
-      ],
+        itemCount: types.length,
+        itemBuilder: (context, i) {
+          final t = types[i];
+          final isSelected = selectedType == t;
+          return InkWell(
+            onTap: () {
+              _onTypeChanged(t);
+              setState(() => _isSelectingType = false);
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isSelected ? theme.colorScheme.primary.withOpacity(0.8) : Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: isSelected ? Colors.white : Colors.white10,
+                    width: isSelected ? 2 : 1
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(typeIcons[t] ?? Icons.extension,
+                      size: 36, // Large icons for high visibility
+                      color: isSelected ? Colors.white : Colors.white70),
+                  const SizedBox(height: 10),
+                  Text(t.name.toUpperCase(),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: isSelected ? Colors.white : Colors.white54
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEditorView() {
+    return SingleChildScrollView(
+      key: const ValueKey("EditorFields"),
+      padding: const EdgeInsets.all(20),
+      child: _buildEditorForType(),
     );
   }
 

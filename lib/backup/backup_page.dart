@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../object/object_manager.dart';
@@ -21,6 +22,22 @@ enum ConflictStatus {
   autoMoveLocked // NEW: Cannot remap address of Auto objects
 }
 enum BackupMode { backup, restore }
+
+Future<bool> _requestStoragePermission() async {
+  if (Platform.isAndroid) {
+    // For Android 11+ (SDK 30+), FilePicker handles much of this,
+    // but basic storage permission is still good practice.
+    var status = await Permission.storage.status;
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+    }
+    if (await Permission.manageExternalStorage.request().isGranted) {
+      return true;
+    }
+    return status.isGranted;
+  }
+  return true; // iOS and Desktop handle this via native dialogs
+}
 
 class BackupPage extends StatefulWidget {
   const BackupPage({super.key});
@@ -113,6 +130,15 @@ class _BackupPageState extends State<BackupPage> {
   // --- UI Builders ---
 
   Future<void> _handleSaveToFile() async {
+    if (!await _requestStoragePermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Storage permission denied")),
+        );
+      }
+      return;
+    }
+
     final objectManager = context.read<ObjectManager>();
 
     // 1. Filter only selected objects
@@ -129,12 +155,16 @@ class _BackupPageState extends State<BackupPage> {
       "objects": selectedObjects,
     };
 
+    final String prettyJson = const JsonEncoder.withIndent('  ').convert(backupData);
+    final Uint8List bytes = Uint8List.fromList(utf8.encode(prettyJson));
+
     // 2. Open Save Dialog
     String? outputPath = await FilePicker.saveFile(
       dialogTitle: 'Save Backup JSON',
       fileName: 'mcu_backup_${DateTime.now().millisecondsSinceEpoch}.json',
       type: FileType.custom,
       allowedExtensions: ['json'],
+      bytes: bytes,
     );
 
     if (outputPath != null) {
@@ -443,6 +473,7 @@ class _BackupPageState extends State<BackupPage> {
   // --- Common Logic ---
 
   void _handleLoadFile() async {
+    if (!await _requestStoragePermission()) return;
     FilePickerResult? result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
     if (result != null && result.files.single.path != null) {
       final data = jsonDecode(await File(result.files.single.path!).readAsString());

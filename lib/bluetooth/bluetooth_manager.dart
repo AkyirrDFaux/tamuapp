@@ -109,7 +109,11 @@ class BluetoothManager extends ChangeNotifier {
     if (_isScanning) return;
     _isScanning = true;
     notifyListeners();
-    await UniversalBle.startScan();
+    await UniversalBle.startScan(
+      scanFilter: ScanFilter(
+        withServices: [UART_SERVICE_UUID],
+      ),
+    );
   }
 
   Future<void> stopScan({bool notify = true}) async {
